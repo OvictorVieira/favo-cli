@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [0.16.0] - 2026-11-14
+
 ### Added
 
 - OpenCode is now counted on the Tokens and Cost pages and in `favo usage --tokens` and `--cost`, beside Claude Code and Codex. favo reads the numbers from OpenCode's own database on each machine, opened read-only, and never the text of a message. Reasoning tokens count as output. A model the price table does not know, such as the names a GitHub Copilot or Z.ai plan gives its models, is counted in tokens and shown as unpriced. Another machine starts counting OpenCode once its favo is updated.
@@ -199,7 +201,8 @@
 - A TUI that shows every machine, account and login, plus a command for everything it does.
 - Native on macOS, Linux and Windows, installed with `npm install --global favo-cli`.
 
-[Unreleased]: https://github.com/irwinarruda/favo-cli/compare/v0.15.0...HEAD
+[Unreleased]: https://github.com/irwinarruda/favo-cli/compare/v0.16.0...HEAD
+[0.16.0]: https://github.com/irwinarruda/favo-cli/compare/v0.15.0...v0.16.0
 [0.15.0]: https://github.com/irwinarruda/favo-cli/compare/v0.14.1...v0.15.0
 [0.14.1]: https://github.com/irwinarruda/favo-cli/compare/v0.14.0...v0.14.1
 [0.14.0]: https://github.com/irwinarruda/favo-cli/compare/v0.13.0...v0.14.0
