@@ -95,6 +95,7 @@ export class SkillsService {
     );
     if (this.candidates.length === 0) await this.scan();
     await this.keep(name, candidateId);
+    await this.adoptUnambiguous();
     await this.finish();
     return this.view();
   }
@@ -116,6 +117,7 @@ export class SkillsService {
       await this.keep(group.name, chosen);
       settled++;
     }
+    await this.adoptUnambiguous();
     await this.finish();
     const left = unresolvedConflicts(this.candidates, (await this.state.read()).skills).length;
     this.progress = `${settled} resolved automatically, ${left} need you.`;

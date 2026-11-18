@@ -152,4 +152,17 @@ describe('the skills screen', () => {
     await view.waitFor(() => mockDb.skills.chosen.length === 1);
     expect(mockDb.skills.chosen).toEqual([{ name: 'review-pr', candidateId: 'new' }]);
   });
+  test('still shows the confirmation when many skills are in conflict', async () => {
+    const view = await open();
+    mockDb.skills.decision = 'enabled' as typeof mockDb.skills.decision;
+    mockDb.skills.conflicts = Array.from({ length: 30 }, (_, index) => ({
+      name: `skill-${index}`,
+      candidates: [candidate(`a${index}`, 'a'), candidate(`b${index}`, 'b')],
+    }));
+    await view.app.state.offerSkills();
+    await view.waitForFrame((frame) => frame.includes('let AI settle'));
+    await view.press('i');
+    const frame = await view.waitForFrame((next) => next.includes('will be sent to your signed-in AI'));
+    expect(frame).not.toContain('skill-3');
+  });
 });

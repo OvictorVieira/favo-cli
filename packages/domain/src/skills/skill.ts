@@ -34,7 +34,12 @@ export const CatalogSkill = z.object({
   warnings: z.array(z.string()),
 });
 export type CatalogSkill = z.infer<typeof CatalogSkill>;
-export const SkillState = z.object({ decision: z.enum(SkillDecision), skills: z.array(CatalogSkill) });
+export const SkillStateFormat = 2;
+export const SkillState = z.object({
+  decision: z.enum(SkillDecision),
+  skills: z.array(CatalogSkill),
+  format: z.number().optional(),
+});
 export type SkillState = z.infer<typeof SkillState>;
 export const SkillConflict = z.object({ name: SkillName, candidates: z.array(SkillCandidate) });
 export const SkillsView = z.object({

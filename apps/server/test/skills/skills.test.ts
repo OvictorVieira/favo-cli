@@ -8,7 +8,7 @@ import { resolveSkill } from '@favo/contracts/rpc/skills/resolve-skill';
 import { skipSkills } from '@favo/contracts/rpc/skills/skip-skills';
 import { LoginState } from '@favo/contracts/rpc/views';
 import type { SkillCandidate } from '@favo/domain/skills/skill';
-import { createTestServer } from '#test/support/test-server';
+import { createTestServer, Home } from '#test/support/test-server';
 
 function candidate(id: string, name = 'debug-root-cause', fingerprint = id): SkillCandidate {
   return {
@@ -204,4 +204,37 @@ test('does not keep the judge conversations in the chat history', async () => {
 test('needs the user to have agreed before comparing anything', async () => {
   const server = createTestServer();
   await expect(server.client.call(autoResolveSkills, {})).rejects.toThrow('Agree');
+});
+
+test('forgets a catalog saved with an older way of telling versions apart, keeping the answer to the consent', async () => {
+  const server = createTestServer();
+  const old = {
+    decision: 'enabled',
+    skills: [
+      { name: 'review-pr', description: 'x', source: '/a', fingerprint: 'old-style', rejected: [], warnings: [] },
+    ],
+  };
+  await server.fileSystem.writePrivateText(`${Home}/.favo/skills/state.json`, JSON.stringify(old));
+  server.skillLibrary.candidates = [candidate('now', 'review-pr')];
+  await server.client.call(importSkills, {});
+  const view = await settled(server);
+  expect(view.conflicts).toEqual([]);
+  expect(view.decision).toBe('enabled');
+  expect(view.skills.map((skill) => skill.fingerprint)).toEqual(['now']);
+});
+
+test('choosing a version also brings in the skills that had no conflict', async () => {
+  const server = createTestServer();
+  await server.fileSystem.writePrivateText(
+    `${Home}/.favo/skills/state.json`,
+    JSON.stringify({ decision: 'enabled', skills: [] })
+  );
+  server.skillLibrary.candidates = [
+    candidate('solo', 'ralph'),
+    candidate('read-only', 'review-pr'),
+    candidate('edits', 'review-pr'),
+  ];
+  const chosen = await server.client.call(resolveSkill, { name: 'review-pr', candidateId: 'edits' });
+  expect(chosen.skills.map((skill) => skill.name).toSorted()).toEqual(['ralph', 'review-pr']);
+  expect(server.skillLibrary.adopted.toSorted()).toEqual(['edits', 'solo']);
 });

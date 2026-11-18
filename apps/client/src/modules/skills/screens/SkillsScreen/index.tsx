@@ -33,6 +33,7 @@ export function SkillsScreen() {
   const isEnabled = view.decision === SkillDecision.enabled;
   const canStart = !isRunning && !isChoosing && !isEnabled;
   const canScanAgain = !isRunning && !isChoosing && isEnabled;
+  const showsChoices = isChoosing && !isConfirmingJudge && !isJudging;
   const isFirstOffer = view.decision === SkillDecision.pending;
   const choices = skillChoices(view);
   const listHeight = Math.max(height - DialogChrome, MinimumListHeight);
@@ -79,7 +80,7 @@ export function SkillsScreen() {
       )}
       {isRunning && (
         <text fg={colors.accentBright}>
-          {isJudging ? 'Your signed-in AI is comparing the versions…' : view.progress}
+          {isJudging ? `Your signed-in AI is comparing the versions… ${view.progress}` : view.progress}
         </text>
       )}
       {isConfirmingJudge && (
@@ -88,7 +89,7 @@ export function SkillsScreen() {
           answers which one to keep. Press enter to go ahead, esc to cancel.
         </text>
       )}
-      {isChoosing && (
+      {showsChoices && (
         <>
           <text fg={colors.text}>
             {view.conflicts.length} skills have versions with different content. Pick the one to keep.
@@ -148,10 +149,10 @@ export function SkillsScreen() {
         {canStart && <KeyHint keys="enter" label="share" onPress={error.handle(startSkillImport)} />}
         {isFirstOffer && !isRunning && <KeyHint keys="s" label="never" onPress={error.handle(skipSkillSharing)} />}
         {canScanAgain && <KeyHint keys="r" label="scan again" onPress={error.handle(startSkillImport)} />}
-        {isChoosing && <KeyHint keys="↑↓" label="move" />}
-        {isChoosing && <KeyHint keys="enter" label="keep this one" onPress={error.handle(chooseSkillVersion)} />}
-        {isChoosing && <KeyHint keys="i" label="let AI settle" onPress={() => setIsConfirmingJudge(true)} />}
-        {isChoosing && <KeyHint keys="a" label="newest of each" onPress={error.handle(keepNewestSkillVersions)} />}
+        {showsChoices && <KeyHint keys="↑↓" label="move" />}
+        {showsChoices && <KeyHint keys="enter" label="keep this one" onPress={error.handle(chooseSkillVersion)} />}
+        {showsChoices && <KeyHint keys="i" label="let AI settle" onPress={() => setIsConfirmingJudge(true)} />}
+        {showsChoices && <KeyHint keys="a" label="newest of each" onPress={error.handle(keepNewestSkillVersions)} />}
         <KeyHint keys="esc" label={isFirstOffer ? 'later' : 'close'} onPress={closeSkills} />
       </box>
     </Dialog>

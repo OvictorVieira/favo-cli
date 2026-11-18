@@ -11,6 +11,7 @@ import { container } from '@/shared/container';
 import type { ServiceCreator } from '@/shared/stores/app';
 
 const PollMilliseconds = 100;
+const WatchMilliseconds = 400;
 
 export type SkillService = {
   skillsView: SkillsView;
@@ -99,12 +100,22 @@ export const createSkillService: ServiceCreator<SkillService> = (set, get) => ({
       get().showToast(skillsView.problems[0] ?? 'Skills could not be linked.', ToastKind.error);
   },
   async autoResolveSkillVersions() {
+    const skills = container.get('ISkillRepository');
+    let isWatching = true;
     set({ isSkillsJudging: true });
+    void (async () => {
+      while (isWatching) {
+        await new Promise((resolve) => setTimeout(resolve, WatchMilliseconds));
+        const progress = await skills.getSkills().catch(() => undefined);
+        if (isWatching && progress) set({ skillsView: progress });
+      }
+    })();
     try {
-      const skillsView = await container.get('ISkillRepository').autoResolveSkills();
+      const skillsView = await skills.autoResolveSkills();
       set({ skillsView, skillChoiceIndex: 0 });
       get().showToast(skillsView.progress);
     } finally {
+      isWatching = false;
       set({ isSkillsJudging: false });
     }
   },
