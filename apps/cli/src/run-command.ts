@@ -28,7 +28,7 @@ import { PersonalAccount } from '@favo/domain/accounts/account';
 import { DesktopAppSpecs, DesktopLogin, DesktopOpening } from '@favo/domain/desktop/desktop-app';
 import { HookState } from '@favo/domain/hooks/provider-hook';
 import { isOlderFavoError, type Machine, MachineState } from '@favo/domain/machines/machine';
-import { Providers } from '@favo/domain/providers/provider';
+import { ProviderOrder, Providers } from '@favo/domain/providers/provider';
 import { DomainError } from '@favo/domain/shared/domain-error';
 import { TerminalAction, type TerminalPlan } from '@favo/domain/terminal/terminal-plan';
 import { ThemeSource } from '@favo/domain/themes/theme';
@@ -38,6 +38,8 @@ import type { Paint } from '@/paint';
 import { type Command, CommandKind } from '@/parse-command';
 import { runUpdate, updateMachines } from '@/run-update';
 import { runUsage } from '@/run-usage';
+
+const LongestExecutable = Math.max(...ProviderOrder.map((provider) => Providers[provider].executable.length));
 
 const HookLabelWidth = 13;
 const ThreadAgeWidth = 9;
@@ -385,7 +387,7 @@ async function printFleet(context: CommandContext, isJson: boolean) {
       for (const seat of account.seats) {
         const isIn = seat.status.login === LoginState.signedIn;
         const mark = isIn ? paint.accent('⬢') : paint.dim('⬡');
-        const label = Providers[seat.provider].executable.padEnd(9);
+        const label = Providers[seat.provider].executable.padEnd(LongestExecutable);
         const detail = [seat.status.identity, seat.status.plan].filter(Boolean).join(' · ');
         print(`    ${mark} ${label} ${detail || paint.dim(loginLabel(seat.status.login))}`);
       }

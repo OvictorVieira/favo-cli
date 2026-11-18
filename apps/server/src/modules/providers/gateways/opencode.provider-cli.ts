@@ -14,6 +14,8 @@ import type { ProcessRunner } from '@/modules/system/gateways/process-runner';
 
 const StatusTimeoutMs = 15_000;
 const StandaloneFlag = '--standalone';
+const FreeModelsIdentity = 'free models';
+const FreeModel = /^opencode\/\S+-free$/;
 const UpdateVariable = 'OPENCODE_DISABLE_AUTOUPDATE';
 const ConfigFiles = ['config.json', 'opencode.json', 'opencode.jsonc'];
 const OpencodeConfig = z.object({ update: z.unknown().optional(), autoupdate: z.unknown().optional() });
@@ -36,8 +38,26 @@ export class OpencodeProviderCli extends ProviderCli {
     });
     if (result.code !== 0) return { login: LoginState.unknown };
     const count = loginCountOf(stripAnsi(`${result.stdout}${result.stderr}`));
-    if (count === 0) return { login: LoginState.signedOut };
+    if (count === 0)
+      return (await this.hasFreeModels(session))
+        ? { login: LoginState.signedIn, identity: FreeModelsIdentity }
+        : { login: LoginState.signedOut };
     return { login: LoginState.signedIn, identity: count === 1 ? '1 login' : `${count} logins` };
+  }
+
+  private async hasFreeModels(session: ProviderSession) {
+    const result = await this.processes.run({
+      command: session.binary,
+      args: ['models', ...(await this.isolationArguments(session))],
+      env: session.env,
+      timeoutMs: StatusTimeoutMs,
+    });
+    return (
+      result.code === 0 &&
+      stripAnsi(result.stdout)
+        .split('\n')
+        .some((line) => FreeModel.test(line.trim()))
+    );
   }
 
   loginArguments() {

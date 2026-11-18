@@ -8,6 +8,7 @@ export const CombHelpKeys = [
   ['tab', 'next machine'],
   ['enter', 'launch, or sign in'],
   ['b', 'go back to a thread'],
+  ['w', 'chat, and change provider in it'],
   ['s / o', 'sign in / sign out'],
   ['c', 'copy the config path'],
   ['p', 'open the desktop app'],

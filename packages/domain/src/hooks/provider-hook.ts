@@ -1,4 +1,4 @@
-import { HookKind, type ProviderId, type ProviderSpec, Providers } from '#domain/providers/provider';
+import { type HookedProviderSpec, HookKind, hookedSpecOf, type ProviderId } from '#domain/providers/provider';
 import { assertDomain, DomainErrorCode } from '#domain/shared/domain-error';
 import { parseJson } from '#domain/shared/parse-json';
 import type { ValueOf } from '#domain/shared/value-of';
@@ -21,7 +21,7 @@ export type HookState = ValueOf<typeof HookState>;
 type JsonObject = Record<string, unknown>;
 
 export function hookCommandOf(provider: ProviderId, isWindows: boolean) {
-  const { executable, hook } = Providers[provider];
+  const { executable, hook } = hookedSpecOf(provider);
   const marker = `favo-hook:${provider}:${HookVersion}`;
   const hasStdoutAnswer = hook.kind === HookKind.namedBlock;
   if (isWindows) {
@@ -34,24 +34,24 @@ export function hookCommandOf(provider: ProviderId, isWindows: boolean) {
   return `sh -c '[ -z "$FAVO_ACCOUNT" ] || ${run} || true${answer}' ${marker}`;
 }
 
-export function hookPathOf(spec: ProviderSpec, paths: { home: string; configHome: string }) {
+export function hookPathOf(spec: HookedProviderSpec, paths: { home: string; configHome: string }) {
   const base = spec.hook.kind === HookKind.plugin ? paths.configHome : paths.home;
   return `${base}/${spec.hook.file}`;
 }
 
-export function hookStateOf(spec: ProviderSpec, text: string | undefined): HookState {
+export function hookStateOf(spec: HookedProviderSpec, text: string | undefined): HookState {
   if (text === undefined) return HookState.absent;
   if (spec.hook.kind === HookKind.plugin) return stateOfVersion(versionIn(text));
   const versions = commandsOf(spec, parseConfig(spec, text)).map(versionIn);
   return stateOfVersion(versions.find((version) => version !== undefined));
 }
 
-export function isHookBlocked(spec: ProviderSpec, text: string | undefined) {
+export function isHookBlocked(spec: HookedProviderSpec, text: string | undefined) {
   if (text === undefined || spec.hook.kind === HookKind.plugin) return false;
   return parseConfig(spec, text).disableAllHooks === true;
 }
 
-export function withHook(spec: ProviderSpec, text: string | undefined, isWindows: boolean) {
+export function withHook(spec: HookedProviderSpec, text: string | undefined, isWindows: boolean) {
   const config = parseConfig(spec, text);
   const entry = { type: 'command', command: hookCommandOf(spec.id, isWindows), timeout: HookTimeoutSeconds };
   if (spec.hook.kind === HookKind.namedBlock) config[NamedBlock] = { [spec.hook.event!]: [entry] };
@@ -59,7 +59,7 @@ export function withHook(spec: ProviderSpec, text: string | undefined, isWindows
   return serialized(config, text);
 }
 
-export function withoutHook(spec: ProviderSpec, text: string) {
+export function withoutHook(spec: HookedProviderSpec, text: string) {
   if (spec.hook.kind === HookKind.plugin) return undefined;
   const config = parseConfig(spec, text);
   if (spec.hook.kind === HookKind.namedBlock) delete config[NamedBlock];
@@ -67,7 +67,7 @@ export function withoutHook(spec: ProviderSpec, text: string) {
   return serialized(config, text);
 }
 
-function placeInGroups(spec: ProviderSpec, config: JsonObject, entry: JsonObject) {
+function placeInGroups(spec: HookedProviderSpec, config: JsonObject, entry: JsonObject) {
   const { event, matcher } = spec.hook;
   const groups = groupsOf(spec, config);
   const holders = groups.filter(holdsFavoHandler);
@@ -78,7 +78,7 @@ function placeInGroups(spec: ProviderSpec, config: JsonObject, entry: JsonObject
   config.hooks = { ...(config.hooks as JsonObject | undefined), [event!]: groups };
 }
 
-function removeFromGroups(spec: ProviderSpec, config: JsonObject) {
+function removeFromGroups(spec: HookedProviderSpec, config: JsonObject) {
   const event = spec.hook.event!;
   const groups = groupsOf(spec, config).flatMap((group) => {
     if (!holdsFavoHandler(group)) return [group];
@@ -92,7 +92,7 @@ function removeFromGroups(spec: ProviderSpec, config: JsonObject) {
   else delete config.hooks;
 }
 
-function commandsOf(spec: ProviderSpec, config: JsonObject) {
+function commandsOf(spec: HookedProviderSpec, config: JsonObject) {
   if (spec.hook.kind === HookKind.namedBlock) {
     const block = config[NamedBlock];
     const handlers = isObject(block) ? block[spec.hook.event!] : undefined;
@@ -101,7 +101,7 @@ function commandsOf(spec: ProviderSpec, config: JsonObject) {
   return groupsOf(spec, config).flatMap(handlersOf).map(commandOf);
 }
 
-function groupsOf(spec: ProviderSpec, config: JsonObject) {
+function groupsOf(spec: HookedProviderSpec, config: JsonObject) {
   const hooks = config.hooks;
   if (hooks === undefined) return [];
   assertShape(spec, isObject(hooks));
@@ -147,14 +147,14 @@ function stateOfVersion(version: number | undefined) {
   return version === HookVersion ? HookState.current : HookState.outdated;
 }
 
-function parseConfig(spec: ProviderSpec, text: string | undefined): JsonObject {
+function parseConfig(spec: HookedProviderSpec, text: string | undefined): JsonObject {
   if (text === undefined || text.trim() === '') return {};
   const parsed = parseJson(text);
   assertShape(spec, isObject(parsed));
   return parsed;
 }
 
-function assertShape(spec: ProviderSpec, condition: unknown): asserts condition {
+function assertShape(spec: HookedProviderSpec, condition: unknown): asserts condition {
   assertDomain(
     condition,
     DomainErrorCode.invalidConfig,

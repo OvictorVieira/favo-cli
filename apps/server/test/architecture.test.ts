@@ -14,6 +14,7 @@ const ModuleLevels: Record<string, number> = {
   desktop: 4,
   usage: 4,
   terminal: 5,
+  chat: 6,
 };
 const StaticImport = /^\s*(?:import|export)(\s+type)?\s+(?:[\w$*{},\s]*?from\s*)?['"]([^'"]+)['"]/gm;
 const DynamicImport = /(?<![\w$.])import\s*\(\s*['"]([^'"]+)['"]/g;

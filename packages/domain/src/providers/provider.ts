@@ -1,4 +1,4 @@
-import { DomainError, DomainErrorCode } from '#domain/shared/domain-error';
+import { assertDomain, DomainError, DomainErrorCode } from '#domain/shared/domain-error';
 import type { ValueOf } from '#domain/shared/value-of';
 import { InstallMethod, type InstallSource } from '#domain/updates/install-source';
 
@@ -7,6 +7,8 @@ export const ProviderId = {
   codex: 'codex',
   antigravity: 'antigravity',
   opencode: 'opencode',
+  cursor: 'cursor',
+  copilot: 'copilot',
 } as const;
 export type ProviderId = ValueOf<typeof ProviderId>;
 
@@ -59,13 +61,17 @@ export type ProviderSpec = {
   shared: string[];
   private: string[];
   mirrorsHome: boolean;
+  unmirrored?: string[];
   loginScope: LoginScope;
   pathHint: string;
   resumeArguments: string[];
-  hook: ProviderHook;
+  initialPromptArguments: string[];
+  hook?: ProviderHook;
   update: ProviderUpdateSpec;
   herdrAgent?: string;
 };
+
+export type HookedProviderSpec = ProviderSpec & { hook: ProviderHook };
 
 export const Providers: Record<ProviderId, ProviderSpec> = {
   claude: {
@@ -94,6 +100,7 @@ export const Providers: Record<ProviderId, ProviderSpec> = {
     loginScope: LoginScope.perAccount,
     pathHint: 'CLAUDE_CONFIG_DIR path',
     resumeArguments: ['--resume'],
+    initialPromptArguments: [],
     hook: {
       kind: HookKind.eventGroups,
       file: '.claude/settings.json',
@@ -123,6 +130,7 @@ export const Providers: Record<ProviderId, ProviderSpec> = {
     loginScope: LoginScope.perAccount,
     pathHint: 'CODEX_HOME path',
     resumeArguments: ['resume'],
+    initialPromptArguments: [],
     hook: {
       kind: HookKind.eventGroups,
       file: '.codex/hooks.json',
@@ -157,6 +165,7 @@ export const Providers: Record<ProviderId, ProviderSpec> = {
     loginScope: LoginScope.perAccount,
     pathHint: 'HOME for agy',
     resumeArguments: ['--conversation'],
+    initialPromptArguments: ['--prompt-interactive'],
     hook: {
       kind: HookKind.namedBlock,
       file: '.gemini/config/hooks.json',
@@ -178,6 +187,7 @@ export const Providers: Record<ProviderId, ProviderSpec> = {
     loginScope: LoginScope.perAccount,
     pathHint: 'XDG_DATA_HOME for opencode',
     resumeArguments: ['--session'],
+    initialPromptArguments: ['--prompt'],
     hook: { kind: HookKind.plugin, file: 'opencode/plugins/favo-threads.js' },
     update: {
       packages: [
@@ -192,6 +202,46 @@ export const Providers: Record<ProviderId, ProviderSpec> = {
       switches: ['OPENCODE_DISABLE_AUTOUPDATE'],
     },
   },
+  cursor: {
+    id: ProviderId.cursor,
+    label: 'Cursor',
+    executable: 'cursor-agent',
+    aliases: ['cursor', 'cursor-agent'],
+    homeKind: ProviderHomeKind.privateHome,
+    personalHome: '.cursor',
+    shared: ['.cursor/skills', '.cursor/agents'],
+    private: ['.cursor/cli-config.json', '.cursor/agent-cli-state.json', '.cursor/chats', '.cursor/projects'],
+    mirrorsHome: true,
+    unmirrored: ['Library'],
+    loginScope: LoginScope.perAccount,
+    pathHint: 'HOME for cursor-agent',
+    resumeArguments: ['--resume'],
+    initialPromptArguments: [],
+    update: { packages: [], arguments: ['update'] },
+  },
+  copilot: {
+    id: ProviderId.copilot,
+    label: 'GitHub Copilot',
+    executable: 'copilot',
+    aliases: ['copilot', 'github-copilot'],
+    homeKind: ProviderHomeKind.privateHome,
+    personalHome: '.copilot',
+    shared: ['.copilot/skills', '.copilot/agents'],
+    private: [
+      '.copilot/config.json',
+      '.copilot/settings.json',
+      '.copilot/session-state',
+      '.copilot/session-store.db',
+      '.copilot/logs',
+    ],
+    mirrorsHome: true,
+    unmirrored: ['Library'],
+    loginScope: LoginScope.perAccount,
+    pathHint: 'HOME for copilot',
+    resumeArguments: ['--resume'],
+    initialPromptArguments: ['--interactive'],
+    update: { packages: ['@github/copilot'], arguments: ['update'] },
+  },
 };
 
 export const UpdateVariables = [
@@ -204,7 +254,17 @@ export const ProviderOrder: ProviderId[] = [
   ProviderId.codex,
   ProviderId.antigravity,
   ProviderId.opencode,
+  ProviderId.cursor,
+  ProviderId.copilot,
 ];
+
+export const HookedProviders = ProviderOrder.filter((id) => Providers[id].hook !== undefined);
+
+export function hookedSpecOf(provider: ProviderId): HookedProviderSpec {
+  const spec = Providers[provider];
+  assertDomain(spec.hook, DomainErrorCode.internal, `${spec.label} has no hook.`);
+  return { ...spec, hook: spec.hook };
+}
 
 export function findProvider(name: string) {
   return ProviderOrder.map((id) => Providers[id]).find((spec) => spec.aliases.includes(name));
@@ -215,7 +275,7 @@ export function requireProvider(name: string) {
   if (!spec) {
     throw new DomainError(
       DomainErrorCode.unknownProvider,
-      `Unknown provider "${name}". Use claude, codex, antigravity or opencode.`
+      `Unknown provider "${name}". Use claude, codex, antigravity, opencode, cursor or copilot.`
     );
   }
   return spec;

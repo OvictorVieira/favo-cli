@@ -75,6 +75,16 @@ describe.skipIf(process.platform === 'win32')('the process runner', () => {
     expect(lines[0] === expected).toBe(true);
     expect(lines[1]).toBe('after');
   });
+  it('can start a process whose input is closed, for a command that waits for the end of its input', async () => {
+    const lines: string[] = [];
+    const waiting = runner.open({ ...sh('cat > /dev/null; echo input-ended') });
+    waiting.onLine((line) => lines.push(line));
+    const closed = runner.open({ ...sh('cat > /dev/null; echo input-ended'), hasNoInput: true });
+    closed.onLine((line) => lines.push(line));
+    expect((await closed.exited).code).toBe(0);
+    expect(lines).toEqual(['input-ended']);
+    waiting.kill();
+  });
   it('starts in the folder it is given', async () => {
     const child = runner.open({ ...sh('pwd'), cwd: '/' });
     const lines: string[] = [];

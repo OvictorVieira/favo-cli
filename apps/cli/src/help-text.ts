@@ -2,7 +2,7 @@ export const HelpText = `favo, a honeycomb for your AI subscriptions
 
   favo                               open the comb
   favo claude [account] [args]       run a provider as an account
-                                     (claude, codex, agy, opencode)
+                                     (claude, codex, agy, opencode, cursor, copilot)
                                      the args after it go to the provider
   favo --dir <folder> claude [account]
                                      start it in that folder

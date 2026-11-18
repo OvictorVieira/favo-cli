@@ -1,7 +1,11 @@
 import { describe, expect, it } from 'bun:test';
+import { fakeAcpRunner } from '#test/support/fake-acp-agent';
+import { recordingRunner } from '#test/support/recording-runner';
 import { AntigravityProviderCli } from '@/modules/providers/gateways/antigravity.provider-cli';
 import { ClaudeProviderCli } from '@/modules/providers/gateways/claude.provider-cli';
 import { CodexProviderCli } from '@/modules/providers/gateways/codex.provider-cli';
+import { CopilotProviderCli } from '@/modules/providers/gateways/copilot.provider-cli';
+import { CursorProviderCli } from '@/modules/providers/gateways/cursor.provider-cli';
 import { OpencodeProviderCli } from '@/modules/providers/gateways/opencode.provider-cli';
 import { MemoryFileSystem } from '@/modules/system/gateways/memory.file-system';
 import { ScriptedProcessRunner } from '@/modules/system/gateways/scripted.process-runner';
@@ -425,6 +429,152 @@ describe('OpenCode shim', () => {
     expect((await new OpencodeProviderCli(processes).status(sessionOf('opencode'))).login).toBe('signedOut');
     processes.reply('opencode auth list', { stdout: '0 credentials' });
     expect((await new OpencodeProviderCli(processes).status(sessionOf('opencode'))).login).toBe('signedOut');
+  });
+  it('counts the free models as signed in, because OpenCode runs on them with no login', async () => {
+    const processes = new ScriptedProcessRunner();
+    processes.reply('opencode auth list', { stdout: '0 credentials' });
+    processes.reply('opencode models', { stdout: 'opencode/big-pickle\nopencode/beam-free\n' });
+    expect(await new OpencodeProviderCli(processes).status(sessionOf('opencode'))).toEqual({
+      login: 'signedIn',
+      identity: 'free models',
+    });
+  });
+  it('stays signed out when no login and no free model is available', async () => {
+    const processes = new ScriptedProcessRunner();
+    processes.reply('opencode auth list', { stdout: '0 credentials' });
+    processes.reply('opencode models', { stdout: 'opencode/big-pickle\n' });
+    expect((await new OpencodeProviderCli(processes).status(sessionOf('opencode'))).login).toBe('signedOut');
+  });
+  it('does not ask for models when a login exists', async () => {
+    const processes = new ScriptedProcessRunner();
+    processes.reply('opencode auth list', { stdout: '1 credentials' });
+    await new OpencodeProviderCli(processes).status(sessionOf('opencode'));
+    expect(processes.calls.some((call) => call.args[0] === 'models')).toBe(false);
+  });
+});
+
+describe('Cursor shim', () => {
+  const status = 'cursor-agent status --format json';
+  const signedIn = JSON.stringify({
+    status: 'authenticated',
+    isAuthenticated: true,
+    userInfo: { email: 'bee@hive.dev', userId: 7 },
+  });
+  const signedOut = JSON.stringify({ status: 'unauthenticated', isAuthenticated: false, message: 'Not logged in' });
+
+  it('reads who is signed in', async () => {
+    const processes = new ScriptedProcessRunner();
+    processes.reply(status, { stdout: signedIn });
+    expect(await new CursorProviderCli(processes).status(sessionOf('cursor-agent'))).toEqual({
+      login: 'signedIn',
+      identity: 'bee@hive.dev',
+    });
+  });
+  it('reads a seat with no login as signed out', async () => {
+    const processes = new ScriptedProcessRunner();
+    processes.reply(status, { stdout: signedOut });
+    expect((await new CursorProviderCli(processes).status(sessionOf('cursor-agent'))).login).toBe('signedOut');
+  });
+  it('stays signed in with no identity when the answer holds no email', async () => {
+    const processes = new ScriptedProcessRunner();
+    processes.reply(status, { stdout: JSON.stringify({ isAuthenticated: true }) });
+    expect(await new CursorProviderCli(processes).status(sessionOf('cursor-agent'))).toEqual({ login: 'signedIn' });
+  });
+  it.each([
+    ['text that is not JSON', 'Error: something broke'],
+    ['nothing at all', ''],
+  ])('says unknown, never signed out, on %s', async (_name, stdout) => {
+    const processes = new ScriptedProcessRunner();
+    processes.reply(status, { stdout, code: 1 });
+    expect((await new CursorProviderCli(processes).status(sessionOf('cursor-agent'))).login).toBe('unknown');
+  });
+  it('asks inside the seat, so the answer is the seat login and not the computer one', async () => {
+    const processes = new ScriptedProcessRunner();
+    processes.reply(status, { stdout: signedOut });
+    const seat = { binary: 'cursor-agent', env: { HOME: '/seat/work/cursor' } };
+    await new CursorProviderCli(processes).status(seat);
+    expect(processes.calls[0]?.env).toEqual({ HOME: '/seat/work/cursor' });
+  });
+  it('signs in and out with its own commands', () => {
+    const cli = new CursorProviderCli(new ScriptedProcessRunner());
+    expect(cli.loginArguments()).toEqual(['login']);
+    expect(cli.logoutArguments()).toEqual(['logout']);
+  });
+});
+
+describe('Copilot shim', () => {
+  const server = 'copilot --acp';
+  const initialized = JSON.stringify({ jsonrpc: '2.0', id: 1, result: { protocolVersion: 1 } });
+  const opened = JSON.stringify({ jsonrpc: '2.0', id: 2, result: { sessionId: 's1' } });
+  const refused = JSON.stringify({
+    jsonrpc: '2.0',
+    id: 2,
+    error: { code: -32000, message: 'Authentication required' },
+  });
+
+  it('is signed in when the agent opens a session', async () => {
+    const processes = new ScriptedProcessRunner();
+    processes.converse(server, [initialized, opened]);
+    expect(await new CopilotProviderCli(processes).status(sessionOf('copilot'))).toEqual({ login: 'signedIn' });
+  });
+  it('is signed out when the agent asks for authentication', async () => {
+    const processes = new ScriptedProcessRunner();
+    processes.converse(server, [initialized, refused]);
+    expect((await new CopilotProviderCli(processes).status(sessionOf('copilot'))).login).toBe('signedOut');
+  });
+  it('says unknown, never signed out, for any other refusal', async () => {
+    const processes = new ScriptedProcessRunner();
+    const other = JSON.stringify({ jsonrpc: '2.0', id: 2, error: { code: -32603, message: 'Internal error' } });
+    processes.converse(server, [initialized, other]);
+    expect((await new CopilotProviderCli(processes).status(sessionOf('copilot'))).login).toBe('unknown');
+  });
+  it('says unknown and kills the agent when it never answers', async () => {
+    const processes = new ScriptedProcessRunner();
+    processes.converse(server, []);
+    expect((await new CopilotProviderCli(processes, 5).status(sessionOf('copilot'))).login).toBe('unknown');
+    expect(processes.killed).toHaveLength(1);
+  });
+  it('does not take the answer to the greeting for the answer about the session', async () => {
+    const processes = new ScriptedProcessRunner();
+    processes.converse(server, [initialized]);
+    expect((await new CopilotProviderCli(processes, 5).status(sessionOf('copilot'))).login).toBe('unknown');
+  });
+  it('starts the agent inside the seat, so the answer is the seat login', async () => {
+    const processes = new ScriptedProcessRunner();
+    processes.converse(server, [initialized, refused]);
+    await new CopilotProviderCli(processes).status({ binary: 'copilot', env: { HOME: '/seat/work/copilot' } });
+    expect(processes.calls[0]?.env).toEqual({ HOME: '/seat/work/copilot' });
+  });
+  it('opens the session in an absolute folder, which the agent insists on', async () => {
+    const writes: string[] = [];
+    const processes = recordingRunner(writes);
+    processes.converse(server, [initialized, opened]);
+    await new CopilotProviderCli(processes).status(sessionOf('copilot'));
+    const questions = writes.map((line) => JSON.parse(line) as { method: string; params: { cwd?: string } });
+    expect(questions.map(({ method }) => method)).toEqual(['initialize', 'session/new']);
+    expect(questions[1]?.params.cwd).toStartWith('/');
+  });
+  it('opens the session in the folder it was asked for', async () => {
+    const writes: string[] = [];
+    const processes = recordingRunner(writes);
+    processes.converse(server, [initialized, opened]);
+    await new CopilotProviderCli(processes).status({ ...sessionOf('copilot'), cwd: '/code/hive' });
+    expect((JSON.parse(writes[1]!) as { params: { cwd: string } }).params.cwd).toBe('/code/hive');
+  });
+  it('waits for the agent to be initialized before it asks for a session', async () => {
+    const agent = fakeAcpRunner();
+    expect((await new CopilotProviderCli(agent.runner).status(sessionOf('copilot'))).login).toBe('signedIn');
+    expect(agent.received.map(({ method }) => method)).toEqual(['initialize', 'session/new']);
+  });
+  it('reads an agent that asks for authentication, after the same wait, as signed out', async () => {
+    const agent = fakeAcpRunner({ sessionError: 'Authentication required' });
+    expect((await new CopilotProviderCli(agent.runner).status(sessionOf('copilot'))).login).toBe('signedOut');
+  });
+  it('signs in with its own command and has no logout the agent can run', () => {
+    const cli = new CopilotProviderCli(new ScriptedProcessRunner());
+    expect(cli.loginArguments({ isOverSsh: false })).toEqual(['login']);
+    expect(cli.loginArguments({ isOverSsh: true })).toEqual(['login', '--device-code']);
+    expect(cli.logoutArguments()).toBeUndefined();
   });
 });
 

@@ -8,7 +8,7 @@ import {
   withHook,
   withoutHook,
 } from '@favo/domain/hooks/provider-hook';
-import { HookKind, type ProviderId, ProviderOrder, Providers } from '@favo/domain/providers/provider';
+import { HookedProviders, HookKind, hookedSpecOf, type ProviderId } from '@favo/domain/providers/provider';
 import { assertDomain, DomainError, DomainErrorCode } from '@favo/domain/shared/domain-error';
 import { EntryKind, isItemHealthy, SharedItemState } from '@favo/domain/sharing/shared-item';
 import type { AccountRepository } from '@/modules/accounts/repositories/account.repository';
@@ -28,7 +28,7 @@ export class HooksService {
   ) {}
 
   async list() {
-    return Promise.all(ProviderOrder.map((provider) => this.viewOf(provider)));
+    return Promise.all(HookedProviders.map((provider) => this.viewOf(provider)));
   }
 
   async install() {
@@ -52,13 +52,13 @@ export class HooksService {
   }
 
   async isInstalled() {
-    const states = await Promise.all(ProviderOrder.map((provider) => this.stateOf(provider)));
+    const states = await Promise.all(HookedProviders.map((provider) => this.stateOf(provider)));
     return states.some(({ state }) => state !== HookState.absent);
   }
 
   private async forEachProvider(action: (provider: ProviderId) => Promise<void>) {
     let failure: DomainError | undefined;
-    for (const provider of ProviderOrder) {
+    for (const provider of HookedProviders) {
       await action(provider).catch((error: unknown) => {
         if (!(error instanceof DomainError)) throw error;
         failure ??= error;
@@ -68,7 +68,7 @@ export class HooksService {
   }
 
   private async write(provider: ProviderId) {
-    const spec = Providers[provider];
+    const spec = hookedSpecOf(provider);
     const path = this.pathOf(provider);
     const text = await this.fileSystem.readText(path);
     const { kind } = await this.fileSystem.entry(path);
@@ -82,7 +82,7 @@ export class HooksService {
   }
 
   private async remove(provider: ProviderId) {
-    const spec = Providers[provider];
+    const spec = hookedSpecOf(provider);
     const path = this.pathOf(provider);
     const text = await this.fileSystem.readText(path);
     if (hookStateOf(spec, text) === HookState.absent) return;
@@ -92,7 +92,7 @@ export class HooksService {
   }
 
   private async viewOf(provider: ProviderId): Promise<HookView> {
-    const spec = Providers[provider];
+    const spec = hookedSpecOf(provider);
     const { state, problem } = await this.stateOf(provider);
     const text = await this.fileSystem.readText(this.pathOf(provider));
     const isBlocked = problem === undefined && isHookBlocked(spec, text);
@@ -115,7 +115,7 @@ export class HooksService {
   private async stateOf(provider: ProviderId): Promise<{ state: HookState; problem?: string }> {
     try {
       const text = await this.fileSystem.readText(this.pathOf(provider));
-      return { state: hookStateOf(Providers[provider], text) };
+      return { state: hookStateOf(hookedSpecOf(provider), text) };
     } catch (error) {
       if (!(error instanceof DomainError)) throw error;
       return { state: HookState.absent, problem: error.message };
@@ -123,7 +123,7 @@ export class HooksService {
   }
 
   private async seatProblems(provider: ProviderId) {
-    const item = Providers[provider].hook.sharedItem;
+    const item = hookedSpecOf(provider).hook.sharedItem;
     if (!item) return [];
     const problems: string[] = [];
     for (const account of await this.accounts.names()) {
@@ -137,6 +137,6 @@ export class HooksService {
   }
 
   private pathOf(provider: ProviderId) {
-    return hookPathOf(Providers[provider], this.paths);
+    return hookPathOf(hookedSpecOf(provider), this.paths);
   }
 }

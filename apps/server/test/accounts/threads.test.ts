@@ -35,6 +35,20 @@ describe('keeping a thread', () => {
       { id: 'abc', directory: Project, updatedAt: '2026-10-31T12:00:00.000Z', isGuess: false, isDirectoryGone: false },
     ]);
   });
+  it('hands the transcript path to the list, so a handoff can read what was said', async () => {
+    const { client, fileSystem } = await seatServer();
+    const transcript = `${WorkClaude}/projects/hive/said.jsonl`;
+    await fileSystem.writePrivateText(transcript, '{"type":"user"}');
+    await client.call(recordThread, event('said', { transcript }));
+    const [thread] = await client.call(listThreads, Work);
+    expect(thread?.transcript).toBe(transcript);
+  });
+  it('leaves the transcript out for a thread whose provider writes none', async () => {
+    const { client } = await seatServer();
+    await client.call(recordThread, event('plain'));
+    const [thread] = await client.call(listThreads, Work);
+    expect(thread?.transcript).toBeUndefined();
+  });
   it('keeps two sessions in one folder, because both are real', async () => {
     const { client } = await seatServer();
     await client.call(recordThread, event('first'));

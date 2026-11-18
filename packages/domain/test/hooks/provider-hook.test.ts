@@ -9,12 +9,12 @@ import {
   withHook,
   withoutHook,
 } from '#domain/hooks/provider-hook';
-import { ProviderId, Providers } from '#domain/providers/provider';
+import { hookedSpecOf, ProviderId } from '#domain/providers/provider';
 
-const claude = Providers.claude;
-const codex = Providers.codex;
-const antigravity = Providers.antigravity;
-const opencode = Providers.opencode;
+const claude = hookedSpecOf(ProviderId.claude);
+const codex = hookedSpecOf(ProviderId.codex);
+const antigravity = hookedSpecOf(ProviderId.antigravity);
+const opencode = hookedSpecOf(ProviderId.opencode);
 
 function decodedScript(command: string) {
   const encoded = /-EncodedCommand (\S+)/.exec(command)![1]!;

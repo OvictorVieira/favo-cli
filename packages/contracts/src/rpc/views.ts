@@ -1,3 +1,4 @@
+import { ChatRole } from '@favo/domain/chat/conversation';
 import { AppLoginState, DesktopLogin } from '@favo/domain/desktop/desktop-app';
 import { HookState } from '@favo/domain/hooks/provider-hook';
 import { LoginScope, ProviderId } from '@favo/domain/providers/provider';
@@ -91,9 +92,46 @@ export const SeatRepair = z.strictObject({
 });
 export type SeatRepair = z.infer<typeof SeatRepair>;
 
+export const ChatMessageView = z.strictObject({
+  role: z.enum(ChatRole),
+  text: z.string(),
+  provider: z.enum(ProviderId).optional(),
+  at: z.string(),
+});
+export type ChatMessageView = z.infer<typeof ChatMessageView>;
+
+export const ChatTurnView = z.strictObject({
+  text: z.string(),
+  tools: z.array(z.string()),
+});
+
+export const ChatView = z.strictObject({
+  id: z.string(),
+  account: z.string(),
+  directory: z.string().optional(),
+  provider: z.enum(ProviderId),
+  isBusy: z.boolean(),
+  messages: z.array(ChatMessageView),
+  turn: ChatTurnView.optional(),
+  error: z.string().optional(),
+  updatedAt: z.string(),
+});
+export type ChatView = z.infer<typeof ChatView>;
+
+export const ChatSummary = z.strictObject({
+  id: z.string(),
+  account: z.string(),
+  directory: z.string().optional(),
+  provider: z.enum(ProviderId),
+  preview: z.string(),
+  updatedAt: z.string(),
+});
+export type ChatSummary = z.infer<typeof ChatSummary>;
+
 export const ThreadView = z.strictObject({
   id: z.string(),
   directory: z.string(),
+  transcript: z.string().optional(),
   updatedAt: z.string(),
   isGuess: z.boolean(),
   isDirectoryGone: z.boolean(),

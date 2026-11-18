@@ -1,7 +1,10 @@
 import { describe, expect, it } from 'bun:test';
 import {
   findProvider,
+  HookedProviders,
+  hookedSpecOf,
   isolationEnvironment,
+  ProviderId,
   ProviderOrder,
   Providers,
   requireProvider,
@@ -36,6 +39,45 @@ describe('providers', () => {
     const environment = isolationEnvironment(Providers.opencode, '/a/opencode');
     expect(environment).toEqual({ XDG_DATA_HOME: '/a/opencode', XDG_STATE_HOME: '/a/opencode/state' });
     expect(Object.keys(environment)).not.toContain('XDG_CONFIG_HOME');
+  });
+  it('gives Cursor and Copilot a private home, because their login follows HOME and not a folder variable', () => {
+    for (const [spec, home] of [
+      [Providers.cursor, '/a/cursor'],
+      [Providers.copilot, '/a/copilot'],
+    ] as const) {
+      expect(isolationEnvironment(spec, home)).toEqual({ HOME: home, USERPROFILE: home });
+    }
+  });
+  it('keeps the macOS Library out of a Cursor or Copilot seat, because the login keychain lives there', () => {
+    expect(Providers.cursor.unmirrored).toContain('Library');
+    expect(Providers.copilot.unmirrored).toContain('Library');
+  });
+  it('hands out the hook of a provider that has one, and refuses one that has none', () => {
+    expect(hookedSpecOf(ProviderId.claude).hook.file).toBe('.claude/settings.json');
+    expect(() => hookedSpecOf(ProviderId.cursor)).toThrow('no hook');
+    expect(HookedProviders).toEqual(['claude', 'codex', 'antigravity', 'opencode']);
+  });
+  it('finds Cursor and Copilot by the names people type', () => {
+    expect(findProvider('cursor')?.id).toBe('cursor');
+    expect(findProvider('cursor-agent')?.id).toBe('cursor');
+    expect(findProvider('copilot')?.id).toBe('copilot');
+    expect(findProvider('agent')).toBeUndefined();
+  });
+  it('lists every provider in the message for an unknown one', () => {
+    expect(() => requireProvider('gemini')).toThrow('claude, codex, antigravity, opencode, cursor or copilot');
+  });
+  it('resumes a thread by id and sends a first prompt the way each CLI takes it', () => {
+    expect(Providers.cursor.resumeArguments).toEqual(['--resume']);
+    expect(Providers.cursor.initialPromptArguments).toEqual([]);
+    expect(Providers.copilot.resumeArguments).toEqual(['--resume']);
+    expect(Providers.copilot.initialPromptArguments).toEqual(['--interactive']);
+  });
+  it('never shares a Cursor or Copilot file that holds a login, a setting the CLI rewrites, or a thread', () => {
+    for (const spec of [Providers.cursor, Providers.copilot]) {
+      for (const name of ['config.json', 'cli-config.json', 'chats', 'projects', 'session-state', 'session-store.db']) {
+        expect(spec.shared.map((item) => item.split('/').at(-1))).not.toContain(name);
+      }
+    }
   });
   it('finds a provider by its command name', () => {
     expect(findProvider('agy')?.id).toBe('antigravity');

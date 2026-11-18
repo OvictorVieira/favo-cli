@@ -2,6 +2,17 @@
 
 ## [Unreleased]
 
+### Added
+
+- When a provider session reports a usage limit, favo offers signed-in providers in the same account and shows their known remaining limit. Choosing one starts it in the same workspace with a prompt to read the previous local transcript when available.
+- favo shows its loading mark while it checks the providers signed in on each machine.
+- Press `w` on a seat for a chat that favo keeps. The provider runs behind it, and `tab` changes provider in the middle of the chat: the next one starts with the conversation so far. It works with Claude Code, Codex, GitHub Copilot, Cursor and OpenCode, and only on this machine.
+- Cursor and GitHub Copilot can be run as separate accounts, each with its own login, like the other providers. Their threads are not listed yet.
+
+### Fixed
+
+- OpenCode now shows as signed in when it runs on its free models with no login, instead of signed out.
+
 ## [0.16.0] - 2026-11-14
 
 ### Added

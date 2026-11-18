@@ -5,6 +5,7 @@ export type ProcessRequest = {
   cwd?: string;
   timeoutMs?: number;
   stdinFile?: string;
+  hasNoInput?: boolean;
 };
 
 export type ProcessResult = { code: number; stdout: string; stderr: string };

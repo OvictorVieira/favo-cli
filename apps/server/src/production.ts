@@ -1,6 +1,7 @@
 import { arch, homedir, hostname, platform } from 'node:os';
 import { basename, delimiter } from 'node:path';
 import { ProviderId } from '@favo/domain/providers/provider';
+import { createChatRunners } from '@/modules/chat/gateways/chat-runners';
 import { HeadlessDesktopApps } from '@/modules/desktop/gateways/headless.desktop-apps';
 import { LinuxDesktopApps } from '@/modules/desktop/gateways/linux.desktop-apps';
 import { MacDesktopApps } from '@/modules/desktop/gateways/mac.desktop-apps';
@@ -14,6 +15,8 @@ import { SshRemoteBackends } from '@/modules/machines/gateways/ssh.remote-backen
 import { AntigravityProviderCli } from '@/modules/providers/gateways/antigravity.provider-cli';
 import { ClaudeProviderCli } from '@/modules/providers/gateways/claude.provider-cli';
 import { CodexProviderCli } from '@/modules/providers/gateways/codex.provider-cli';
+import { CopilotProviderCli } from '@/modules/providers/gateways/copilot.provider-cli';
+import { CursorProviderCli } from '@/modules/providers/gateways/cursor.provider-cli';
 import { OpencodeProviderCli } from '@/modules/providers/gateways/opencode.provider-cli';
 import { BunProcessRunner } from '@/modules/system/gateways/bun.process-runner';
 import { InheritedShellEnvironment } from '@/modules/system/gateways/inherited.shell-environment';
@@ -57,7 +60,10 @@ export function createProductionServer(env: Record<string, string | undefined>) 
         [ProviderId.codex]: new CodexProviderCli(processes),
         [ProviderId.antigravity]: new AntigravityProviderCli(processes),
         [ProviderId.opencode]: new OpencodeProviderCli(processes),
+        [ProviderId.cursor]: new CursorProviderCli(processes),
+        [ProviderId.copilot]: new CopilotProviderCli(processes),
       },
+      chatRunners: createChatRunners(processes),
       ssh,
       tailscale: new CliTailscale(processes),
       remotes: new SshRemoteBackends(ssh),

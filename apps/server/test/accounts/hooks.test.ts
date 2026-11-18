@@ -48,6 +48,16 @@ describe('favo hooks install', () => {
     expect(await fileSystem.readText(AntigravityHooks)).toContain('favo-hook:antigravity');
     expect(await fileSystem.readText(Plugin)).toContain(`favo-hook:opencode:${HookVersion}`);
   });
+  it('leaves Cursor and Copilot out, because favo has no hook for them yet', async () => {
+    const { client, fileSystem } = await serverWithSeat({
+      installed: ['claude', 'codex', 'agy', 'opencode', 'cursor-agent', 'copilot'],
+    });
+    const hooks = await client.call(installHooks, {});
+    expect(hooks.map(({ provider }) => provider)).toEqual(['claude', 'codex', 'antigravity', 'opencode']);
+    expect((await fileSystem.entry(`${Home}/.cursor`)).kind).toBe(EntryKind.missing);
+    expect((await fileSystem.entry(`${Home}/.copilot`)).kind).toBe(EntryKind.missing);
+    expect(await client.call(uninstallHooks, {})).toHaveLength(4);
+  });
   it('skips a provider that is not installed, and says so', async () => {
     const { client, fileSystem } = await serverWithSeat({ installed: ['claude'] });
     const hooks = await client.call(installHooks, {});

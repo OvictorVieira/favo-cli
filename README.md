@@ -25,7 +25,7 @@
   <img src="docs/assets/favo-wax.png#gh-light-mode-only" alt="favo showing four machines, six accounts and their logins in one terminal view" width="900">
 </p>
 
-favo runs Claude Code, Codex, Antigravity CLI and OpenCode under as many accounts as you have, at the same time, on all your machines. Each account keeps its own login and threads. Your `CLAUDE.md`, skills and settings follow you into all of them.
+favo runs Claude Code, Codex, Antigravity CLI, OpenCode, Cursor and GitHub Copilot under as many accounts as you have, at the same time, on all your machines. Each account keeps its own login and threads. Your `CLAUDE.md`, skills and settings follow you into all of them.
 
 **Before**
 
@@ -124,7 +124,7 @@ favo counts from the session logs Claude Code and Codex already keep and from Op
 
 ### A TUI you will want to leave open
 
-See every machine, account and login, spot what needs signing in, and press `enter` to launch. Prefer scripts? Everything is a command too, and `favo list --json` gives you the same view as data.
+See every machine, account and login, spot what needs signing in, and press `enter` to launch, or `w` for a chat that favo keeps: `tab` changes provider in the middle of it and the next one gets the conversation. The chat works with Claude Code, Codex, GitHub Copilot, Cursor and OpenCode, on this machine. Prefer scripts? Everything is a command too, and `favo list --json` gives you the same view as data.
 
 Twelve themes come built in, with a live preview, and your own is a small JSON file away:
 
@@ -174,6 +174,11 @@ If the app and Claude Code are signed in to different accounts, the tag turns re
 | Codex           | login, threads, history | AGENTS.md, config.toml, hooks.json, skills, agents, rules, prompts         |
 | OpenCode        | logins, threads         | all of its config                                                          |
 | Antigravity CLI | conversations           | GEMINI.md, settings, skills, plugins                                       |
+| Cursor          | login, chats, settings  | skills, agents                                                             |
+| GitHub Copilot  | login, sessions         | skills, agents                                                             |
+
+> [!NOTE]
+> **Cursor and GitHub Copilot run in a private home folder** that mirrors yours, without your macOS `Library`, because their login lives in the keychain, which a mirrored `Library` would share between every account. favo does not list their threads yet. favo checked on macOS that an account without that `Library` reads as signed out, but it has not yet watched a real sign-in inside an account, so confirm that a second account's login leaves the first one signed in. On Linux and Windows their login may be shared by every account, and favo has not verified it.
 
 > [!WARNING]
 > **Antigravity is the exception.** Conversations are separate per account, but favo could not verify that its login is, and the TUI says so on that seat. It also runs in a private home folder that mirrors yours, so it can see your other files there, not only the shared list above.
@@ -265,7 +270,7 @@ favo app claude work         # open the Claude app as work
 favo theme tokyo-night       # pick a theme
 ```
 
-Providers are `claude`, `codex`, `agy` and `opencode`. Most commands take `--machine <machine>` to run on another computer. When favo starts a provider, favo's own options go before the provider, and everything after the account goes to the provider, flags and prompt included. `favo --help` lists the rest.
+Providers are `claude`, `codex`, `agy`, `opencode`, `cursor` and `copilot`. Most commands take `--machine <machine>` to run on another computer. When favo starts a provider, favo's own options go before the provider, and everything after the account goes to the provider, flags and prompt included. `favo --help` lists the rest.
 
 `favo usage` and the `u` screen have three pages: Limits, Tokens and Cost. Limits is the default, and `--limits`, `--tokens` and `--cost` pick one. Every page takes `--machine`, `--account` and `--provider`, each as many times as you like, and `--json`. In the TUI, `l` `t` `c` change the page and `f` opens the same three filters.
 
@@ -397,6 +402,8 @@ In the comb, `v` lists every provider CLI on every machine: its version and how 
 | Claude Code | `claude update`. A Homebrew install only prints what to run there, so favo runs `brew upgrade --cask` itself.                                                   |
 | Codex       | `codex update`, then the package manager if that fails.                                                                                                         |
 | OpenCode    | `opencode upgrade`, then the package manager if that fails.                                                                                                     |
+| Cursor      | `cursor-agent update`.                                                                                                                                          |
+| Copilot     | `copilot update`, then the package manager if that fails.                                                                                                       |
 | Antigravity | It has no update command, and updates itself. A Homebrew install gets `brew upgrade --cask antigravity-cli`. Any other install is left alone, and favo says so. |
 
 A global npm install belongs to its Node version, so favo uses the `npm` next to it. A `mise` or `asdf` shim hides where the real install is, so favo runs the provider's own command there, with no package manager to fall back on. favo never runs `sudo`: if a system-wide install needs it, you see the failure and can run the command yourself.
