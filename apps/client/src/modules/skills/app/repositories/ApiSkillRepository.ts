@@ -1,4 +1,5 @@
 import type { RpcClient } from '@favo/contracts/rpc/client';
+import { autoResolveSkills } from '@favo/contracts/rpc/skills/auto-resolve-skills';
 import { getSkills } from '@favo/contracts/rpc/skills/get-skills';
 import { importSkills } from '@favo/contracts/rpc/skills/import-skills';
 import { resolveSkill } from '@favo/contracts/rpc/skills/resolve-skill';
@@ -18,6 +19,10 @@ export class ApiSkillRepository implements ISkillRepository {
 
   skipSkills() {
     return this.client.call(skipSkills, {});
+  }
+
+  autoResolveSkills() {
+    return this.client.call(autoResolveSkills, {});
   }
 
   resolveSkill(name: string, candidateId: string) {

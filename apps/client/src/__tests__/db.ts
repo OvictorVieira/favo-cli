@@ -343,6 +343,7 @@ function seedSkills() {
     conflicts: [] as SkillsView['conflicts'],
     importable,
     imports: 0,
+    autoPicks: {} as Record<string, string>,
     chosen: [] as { name: string; candidateId: string }[],
   };
 }

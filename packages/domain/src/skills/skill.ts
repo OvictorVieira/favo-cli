@@ -22,6 +22,7 @@ export const SkillCandidate = z.object({
   fingerprint: z.string(),
   preview: z.string(),
   warnings: z.array(z.string()),
+  modifiedAt: z.number().optional(),
 });
 export type SkillCandidate = z.infer<typeof SkillCandidate>;
 export const CatalogSkill = z.object({
@@ -99,4 +100,13 @@ export function toCatalogSkill(candidate: SkillCandidate, rejected: string[]): C
 
 export function isSkillWorkRunning(phase: SkillsView['phase']) {
   return phase === SkillPhase.scanning || phase === SkillPhase.importing || phase === SkillPhase.syncing;
+}
+
+export function newestVersions(conflicts: { name: string; candidates: SkillCandidate[] }[]) {
+  return conflicts.map(({ name, candidates }) => {
+    const newest = candidates.reduce((best, candidate) =>
+      (candidate.modifiedAt ?? 0) > (best.modifiedAt ?? 0) ? candidate : best
+    );
+    return { name, candidateId: newest.id };
+  });
 }

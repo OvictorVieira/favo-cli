@@ -1,4 +1,10 @@
-import { isSkillWorkRunning, SkillDecision, SkillPhase, type SkillsView } from '@favo/domain/skills/skill';
+import {
+  isSkillWorkRunning,
+  newestVersions,
+  SkillDecision,
+  SkillPhase,
+  type SkillsView,
+} from '@favo/domain/skills/skill';
 import { skillChoices } from '@/modules/skills/parsers/skillChoices';
 import { ToastKind } from '@/shared/app/services/ToastService';
 import { container } from '@/shared/container';
@@ -17,6 +23,9 @@ export type SkillService = {
   skipSkillSharing(): Promise<void>;
   moveSkillChoice(delta: number): void;
   chooseSkillVersion(): Promise<void>;
+  keepNewestSkillVersions(): Promise<void>;
+  autoResolveSkillVersions(): Promise<void>;
+  isSkillsJudging: boolean;
 };
 
 const NoSkills: SkillsView = {
@@ -32,6 +41,7 @@ export const createSkillService: ServiceCreator<SkillService> = (set, get) => ({
   skillsView: NoSkills,
   isSkillsOpen: false,
   skillChoiceIndex: 0,
+  isSkillsJudging: false,
   async offerSkills() {
     const skillsView = await container.get('ISkillRepository').getSkills();
     const needsAnswer = skillsView.decision === SkillDecision.pending || skillsView.conflicts.length > 0;
@@ -77,5 +87,25 @@ export const createSkillService: ServiceCreator<SkillService> = (set, get) => ({
     const next = await container.get('ISkillRepository').resolveSkill(choice.name, choice.candidate.id);
     set({ skillsView: next, skillChoiceIndex: 0 });
     if (next.phase === SkillPhase.failed) showToast(next.problems[0] ?? 'Skills could not be linked.', ToastKind.error);
+  },
+  async keepNewestSkillVersions() {
+    const skills = container.get('ISkillRepository');
+    let { skillsView } = get();
+    for (const { name, candidateId } of newestVersions(skillsView.conflicts)) {
+      skillsView = await skills.resolveSkill(name, candidateId);
+      set({ skillsView, skillChoiceIndex: 0 });
+    }
+    if (skillsView.phase === SkillPhase.failed)
+      get().showToast(skillsView.problems[0] ?? 'Skills could not be linked.', ToastKind.error);
+  },
+  async autoResolveSkillVersions() {
+    set({ isSkillsJudging: true });
+    try {
+      const skillsView = await container.get('ISkillRepository').autoResolveSkills();
+      set({ skillsView, skillChoiceIndex: 0 });
+      get().showToast(skillsView.progress);
+    } finally {
+      set({ isSkillsJudging: false });
+    }
   },
 });

@@ -11,6 +11,7 @@ import { registerChatController } from '@/modules/chat/controllers/chat.controll
 import type { ChatRunners } from '@/modules/chat/gateways/chat-runner';
 import { ConversationRepository } from '@/modules/chat/repositories/conversation.repository';
 import { ChatService } from '@/modules/chat/services/chat.service';
+import { ChatSkillJudge } from '@/modules/chat/services/chat-skill-judge.service';
 import { registerDesktopController } from '@/modules/desktop/controllers/desktop.controller';
 import type { DesktopApps } from '@/modules/desktop/gateways/desktop-apps';
 import { DesktopAppsService } from '@/modules/desktop/services/desktop-apps.service';
@@ -109,7 +110,7 @@ export function createServer(gateways: ServerGateways, options: ServerOptions) {
   const providers = new ProvidersService(clis, processes, shell, paths, callerEnv);
   const config = new ConfigRepository(fileSystem, paths);
   const accountRepository = new AccountRepository(fileSystem, paths);
-  const skills = new SkillsService(new SkillStateRepository(fileSystem, paths), skillLibrary);
+  const skills = new SkillsService(new SkillStateRepository(fileSystem, paths), skillLibrary, () => skillJudge);
   const seats = new SeatsService(fileSystem, accountRepository, providers, paths, skills);
   const threadRepository = new ThreadRepository(fileSystem, paths);
   const accounts = new AccountsService(
@@ -199,6 +200,7 @@ export function createServer(gateways: ServerGateways, options: ServerOptions) {
     clock,
     isDangerouslySkippingPermissions
   );
+  const skillJudge = new ChatSkillJudge(chat, providers, fileSystem, `${paths.root}/skills/judge`);
   registerSkillsController(router, skills);
   registerSystemController(router, host);
   registerAccountsController(router, accounts, seats, threads, hooks);

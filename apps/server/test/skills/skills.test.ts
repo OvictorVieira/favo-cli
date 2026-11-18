@@ -1,9 +1,12 @@
 import { expect, test } from 'bun:test';
+import { listChats } from '@favo/contracts/rpc/chat/list-chats';
 import { provisionSeat } from '@favo/contracts/rpc/seats/provision-seat';
+import { autoResolveSkills } from '@favo/contracts/rpc/skills/auto-resolve-skills';
 import { getSkills } from '@favo/contracts/rpc/skills/get-skills';
 import { importSkills } from '@favo/contracts/rpc/skills/import-skills';
 import { resolveSkill } from '@favo/contracts/rpc/skills/resolve-skill';
 import { skipSkills } from '@favo/contracts/rpc/skills/skip-skills';
+import { LoginState } from '@favo/contracts/rpc/views';
 import type { SkillCandidate } from '@favo/domain/skills/skill';
 import { createTestServer } from '#test/support/test-server';
 
@@ -135,4 +138,70 @@ test('a skipped user is told sharing is off, not to agree again', async () => {
   await expect(server.client.call(resolveSkill, { name: 'review-pr', candidateId: 'x' })).rejects.toThrow(
     'sharing is off'
   );
+});
+
+function versioned(id: string, preview: string, modifiedAt: number): SkillCandidate {
+  return { ...candidate(id, 'review-pr'), preview, modifiedAt };
+}
+async function enabledWithConflict(preview: string[]) {
+  const server = createTestServer();
+  server.skillLibrary.candidates = preview.map((text, index) => versioned(`v${index}`, text, index + 1));
+  await server.client.call(importSkills, {});
+  expect((await settled(server)).phase).toBe('conflicts');
+  return server;
+}
+const Pick = (id: string) => [
+  { type: 'message' as const, text: `{"verdict":"pick","id":"${id}"}` },
+  { type: 'turn-completed' as const },
+];
+const Human = [{ type: 'message' as const, text: '{"verdict":"human"}' }, { type: 'turn-completed' as const }];
+
+test('settles versions that are obviously the same skill without asking any AI', async () => {
+  const server = await enabledWithConflict(['a\nb', 'a\nb\nc']);
+  server.clis.claude.login = { login: LoginState.signedIn, identity: 'bee@x.dev' };
+  const view = await server.client.call(autoResolveSkills, {});
+  expect(view.conflicts).toEqual([]);
+  expect(view.skills.find((skill) => skill.name === 'review-pr')?.fingerprint).toBe('v1');
+  expect(view.progress).toBe('1 resolved automatically, 0 need you.');
+  expect(server.chatRunners.claude.sent).toEqual([]);
+});
+test('asks the best signed-in provider about versions that really differ, and follows its pick', async () => {
+  const server = await enabledWithConflict(['a\nonly one', 'a\nonly two']);
+  server.clis.claude.login = { login: LoginState.signedIn, identity: 'bee@x.dev' };
+  server.clis.codex.login = { login: LoginState.signedIn, identity: 'bee@x.dev' };
+  server.chatRunners.claude.answers = [Pick('v0')];
+  const view = await server.client.call(autoResolveSkills, {});
+  expect(server.chatRunners.claude.sent[0]).toContain('only two');
+  expect(server.chatRunners.codex.sent).toEqual([]);
+  expect(view.skills.find((skill) => skill.name === 'review-pr')?.fingerprint).toBe('v0');
+  expect(view.progress).toBe('1 resolved automatically, 0 need you.');
+});
+test('falls back to the next provider when the first cannot answer', async () => {
+  const server = await enabledWithConflict(['a\nonly one', 'a\nonly two']);
+  server.clis.claude.login = { login: LoginState.signedIn, identity: 'bee@x.dev' };
+  server.clis.codex.login = { login: LoginState.signedIn, identity: 'bee@x.dev' };
+  server.chatRunners.claude.answers = [[{ type: 'error', message: 'rate limited' }]];
+  server.chatRunners.codex.answers = [Pick('v1')];
+  const view = await server.client.call(autoResolveSkills, {});
+  expect(view.skills.find((skill) => skill.name === 'review-pr')?.fingerprint).toBe('v1');
+});
+test('leaves the conflict to the user when the AI is not sure or nobody is signed in', async () => {
+  const server = await enabledWithConflict(['a\nonly one', 'a\nonly two']);
+  expect((await server.client.call(autoResolveSkills, {})).conflicts).toHaveLength(1);
+  server.clis.claude.login = { login: LoginState.signedIn, identity: 'bee@x.dev' };
+  server.chatRunners.claude.answers = [Human];
+  const view = await server.client.call(autoResolveSkills, {});
+  expect(view.conflicts).toHaveLength(1);
+  expect(view.progress).toBe('0 resolved automatically, 1 need you.');
+});
+test('does not keep the judge conversations in the chat history', async () => {
+  const server = await enabledWithConflict(['a\nonly one', 'a\nonly two']);
+  server.clis.claude.login = { login: LoginState.signedIn, identity: 'bee@x.dev' };
+  server.chatRunners.claude.answers = [Pick('v0')];
+  await server.client.call(autoResolveSkills, {});
+  expect(await server.client.call(listChats, {})).toEqual([]);
+});
+test('needs the user to have agreed before comparing anything', async () => {
+  const server = createTestServer();
+  await expect(server.client.call(autoResolveSkills, {})).rejects.toThrow('Agree');
 });

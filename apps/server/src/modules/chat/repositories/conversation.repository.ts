@@ -29,6 +29,11 @@ export class ConversationRepository {
     await this.fileSystem.replaceText(this.fileOf(conversation.id), JSON.stringify(conversation));
   }
 
+  async remove(id: string) {
+    assertDomain(ChatIdPattern.test(id), DomainErrorCode.chatNotFound, 'No chat with that id.');
+    await this.fileSystem.unlink(this.fileOf(id));
+  }
+
   async all() {
     const names = await this.fileSystem.list(this.paths.chats);
     const found = await Promise.all(

@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'bun:test';
+import { autoResolveSkills } from '#contracts/rpc/skills/auto-resolve-skills';
 import { getSkills } from '#contracts/rpc/skills/get-skills';
 import { importSkills } from '#contracts/rpc/skills/import-skills';
 import { resolveSkill } from '#contracts/rpc/skills/resolve-skill';
@@ -8,7 +9,7 @@ const view = { decision: 'pending', phase: 'idle', progress: '', skills: [], con
 
 describe('skills', () => {
   it('are read, imported and skipped on the favo you talk to, with no parameters', () => {
-    for (const method of [getSkills, importSkills, skipSkills]) {
+    for (const method of [getSkills, importSkills, skipSkills, autoResolveSkills]) {
       expect(method.routing).toBe('hub');
       expect(method.params.safeParse({}).success).toBe(true);
       expect(method.params.safeParse({ extra: 1 }).success).toBe(false);

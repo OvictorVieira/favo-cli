@@ -4,6 +4,7 @@ import {
   catalogCandidateId,
   isCatalogCandidate,
   isSkillWorkRunning,
+  newestVersions,
   type SkillCandidate,
   SkillName,
   SkillPhase,
@@ -69,6 +70,31 @@ describe('skill phases', () => {
     expect(isSkillWorkRunning(SkillPhase.syncing)).toBe(true);
     expect(isSkillWorkRunning(SkillPhase.conflicts)).toBe(false);
     expect(isSkillWorkRunning(SkillPhase.done)).toBe(false);
+  });
+});
+
+describe('newestVersions', () => {
+  it('picks the most recently modified version of each name', () => {
+    const picked = newestVersions([
+      {
+        name: 'review-pr',
+        candidates: [
+          { ...candidate('old'), modifiedAt: 1 },
+          { ...candidate('new'), modifiedAt: 5 },
+        ],
+      },
+      {
+        name: 'ralph',
+        candidates: [
+          { ...candidate('a'), modifiedAt: undefined },
+          { ...candidate('b'), modifiedAt: 2 },
+        ],
+      },
+    ]);
+    expect(picked).toEqual([
+      { name: 'review-pr', candidateId: 'new' },
+      { name: 'ralph', candidateId: 'b' },
+    ]);
   });
 });
 

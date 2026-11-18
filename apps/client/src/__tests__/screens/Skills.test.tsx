@@ -41,7 +41,7 @@ describe('the skills screen', () => {
     await view.waitForFrame((frame) => frame.includes('Share your agent skills'));
     await view.press('RETURN');
     await view.waitForFrame((frame) => frame.includes('⬢ debug-root-cause'));
-    expect(view.captureCharFrame()).toContain('External plugins/MCP tools');
+    expect(view.captureCharFrame()).toContain('External plugins/MCP');
     expect(mockDb.skills.imports).toBe(1);
   });
   test('stops on a conflict until a version is chosen', async () => {
@@ -53,10 +53,9 @@ describe('the skills screen', () => {
     await view.app.state.offerSkills();
     await view.waitForFrame((frame) => frame.includes('Share your agent skills'));
     await view.press('RETURN');
-    await view.waitForFrame((frame) => frame.includes('Pick the version to keep'));
+    await view.waitForFrame((frame) => frame.includes('Pick the one to keep'));
     const frame = view.captureCharFrame();
-    expect(frame).toContain('/skills/read-only');
-    expect(frame).toContain('edits files');
+    expect(frame).toContain('skills/read-only');
     await view.press('j', 'RETURN');
     await view.waitForFrame(
       (next) => next.includes('1 skills in the Favo catalog') || next.includes('⬢ debug-root-cause')
@@ -97,7 +96,7 @@ describe('the skills screen', () => {
       { name: 'review-pr', candidates: [candidate('read-only', 'only reads'), candidate('edits', 'edits files')] },
     ];
     await view.app.state.offerSkills();
-    await view.waitForFrame((frame) => frame.includes('Pick the version to keep'));
+    await view.waitForFrame((frame) => frame.includes('Pick the one to keep'));
   });
   test('scans again with r once sharing is on', async () => {
     const view = await open();
@@ -106,5 +105,51 @@ describe('the skills screen', () => {
     await view.waitForFrame((frame) => frame.includes('scan again'));
     await view.press('r');
     await view.waitFor(() => mockDb.skills.imports === 1);
+  });
+  test('keeps the newest version of every conflict with a', async () => {
+    const view = await open();
+    mockDb.skills.decision = 'enabled' as typeof mockDb.skills.decision;
+    mockDb.skills.conflicts = [
+      {
+        name: 'review-pr',
+        candidates: [
+          { ...candidate('old', 'a'), modifiedAt: 1 },
+          { ...candidate('new', 'b'), modifiedAt: 2 },
+        ],
+      },
+      {
+        name: 'ralph',
+        candidates: [
+          { ...candidate('r-new', 'c'), name: 'ralph', modifiedAt: 9 },
+          { ...candidate('r-old', 'd'), name: 'ralph', modifiedAt: 3 },
+        ],
+      },
+    ];
+    await view.app.state.offerSkills();
+    await view.waitForFrame((frame) => frame.includes('2 skills have versions'));
+    await view.press('a');
+    await view.waitFor(() => mockDb.skills.chosen.length === 2);
+    expect(mockDb.skills.chosen).toEqual([
+      { name: 'review-pr', candidateId: 'new' },
+      { name: 'ralph', candidateId: 'r-new' },
+    ]);
+  });
+  test('asks before sending the versions to an AI, then lets it settle with i', async () => {
+    const view = await open();
+    mockDb.skills.decision = 'enabled' as typeof mockDb.skills.decision;
+    mockDb.skills.conflicts = [{ name: 'review-pr', candidates: [candidate('old', 'a'), candidate('new', 'b')] }];
+    mockDb.skills.autoPicks = { 'review-pr': 'new' };
+    await view.app.state.offerSkills();
+    await view.waitForFrame((frame) => frame.includes('let AI settle'));
+    await view.press('i');
+    await view.waitForFrame((frame) => frame.includes('will be sent to your signed-in AI'));
+    expect(mockDb.skills.chosen).toEqual([]);
+    await view.pressEscape();
+    expect(view.captureCharFrame()).not.toContain('will be sent to your signed-in AI');
+    await view.press('i');
+    await view.waitForFrame((frame) => frame.includes('will be sent to your signed-in AI'));
+    await view.press('RETURN');
+    await view.waitFor(() => mockDb.skills.chosen.length === 1);
+    expect(mockDb.skills.chosen).toEqual([{ name: 'review-pr', candidateId: 'new' }]);
   });
 });

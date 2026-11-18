@@ -1,3 +1,4 @@
+import { autoResolveSkills } from '@favo/contracts/rpc/skills/auto-resolve-skills';
 import { getSkills } from '@favo/contracts/rpc/skills/get-skills';
 import { importSkills } from '@favo/contracts/rpc/skills/import-skills';
 import { resolveSkill } from '@favo/contracts/rpc/skills/resolve-skill';
@@ -9,5 +10,6 @@ export function registerSkillsController(router: RpcRouter, skills: SkillsServic
   router.handle(getSkills, () => skills.view());
   router.handle(importSkills, () => skills.start());
   router.handle(skipSkills, () => skills.skip());
+  router.handle(autoResolveSkills, () => skills.autoResolve());
   router.handle(resolveSkill, ({ name, candidateId }) => skills.resolve(name, candidateId));
 }

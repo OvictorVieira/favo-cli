@@ -9,6 +9,8 @@ import {
   toCatalogSkill,
   unresolvedConflicts,
 } from '@favo/domain/skills/skill';
+import { obviousWinner } from '@favo/domain/skills/skill-judge';
+import type { SkillJudge } from '@/modules/skills/gateways/skill-judge';
 import type { SkillLibrary } from '@/modules/skills/gateways/skill-library';
 import type { SkillStateRepository } from '@/modules/skills/repositories/skill-state.repository';
 
@@ -24,7 +26,8 @@ export class SkillsService {
   private work?: Promise<void>;
   constructor(
     private readonly state: SkillStateRepository,
-    private readonly library: SkillLibrary
+    private readonly library: SkillLibrary,
+    private readonly judge: () => SkillJudge
   ) {}
 
   async view(): Promise<SkillsView> {
@@ -55,14 +58,22 @@ export class SkillsService {
     return this.view();
   }
 
-  async resolve(name: string, candidateId: string) {
+  resolve(name: string, candidateId: string) {
+    return this.exclusively(() => this.choose(name, candidateId));
+  }
+
+  autoResolve() {
+    return this.exclusively(() => this.settle());
+  }
+
+  private async exclusively<T>(task: () => Promise<T>) {
     this.assertIdle();
-    const running = this.choose(name, candidateId);
-    this.work = running.then(
+    const running = task();
+    const guard = running.then(
       () => undefined,
       () => undefined
     );
-    const guard = this.work;
+    this.work = guard;
     try {
       return await running;
     } finally {
@@ -83,6 +94,41 @@ export class SkillsService {
       'Skill sharing is off. Run favo skills import to turn it on.'
     );
     if (this.candidates.length === 0) await this.scan();
+    await this.keep(name, candidateId);
+    await this.finish();
+    return this.view();
+  }
+
+  private async settle() {
+    const state = await this.state.read();
+    assertDomain(
+      state.decision === SkillDecision.enabled,
+      DomainErrorCode.invalidParams,
+      'Agree to share your skills first: favo skills import'
+    );
+    await this.scan();
+    const groups = unresolvedConflicts(this.candidates, state.skills);
+    let settled = 0;
+    for (const group of groups) {
+      this.progress = `Comparing ${group.name}`;
+      const chosen = obviousWinner(group.candidates) ?? (await this.verdictFor(group.name, group.candidates));
+      if (!chosen) continue;
+      await this.keep(group.name, chosen);
+      settled++;
+    }
+    await this.finish();
+    const left = unresolvedConflicts(this.candidates, (await this.state.read()).skills).length;
+    this.progress = `${settled} resolved automatically, ${left} need you.`;
+    return this.view();
+  }
+
+  private async verdictFor(name: string, candidates: SkillCandidate[]) {
+    const verdict = await this.judge().judge(name, candidates);
+    return verdict.kind === 'pick' ? verdict.candidateId : undefined;
+  }
+
+  private async keep(name: string, candidateId: string) {
+    const state = await this.state.read();
     const group = skillConflicts(this.candidates, state.skills).find((group) => group.name === name);
     const selected = group?.candidates.find((candidate) => candidate.id === candidateId);
     assertDomain(
@@ -98,8 +144,6 @@ export class SkillsService {
       ...state,
       skills: [...state.skills.filter((skill) => skill.name !== name), toCatalogSkill(selected, rejected)],
     });
-    await this.finish();
-    return this.view();
   }
 
   async ensureProvider() {

@@ -7,3 +7,11 @@ export function skillChoices(view: SkillsView): SkillChoice[] {
     conflict.candidates.map((candidate) => ({ name: conflict.name, candidate }))
   );
 }
+
+export function shortPath(path: string, home?: string) {
+  return home && path.startsWith(`${home}/`) ? `~${path.slice(home.length)}` : path;
+}
+
+export function modifiedDay(candidate: SkillCandidate) {
+  return candidate.modifiedAt ? new Date(candidate.modifiedAt).toISOString().slice(0, 10) : 'catalog';
+}

@@ -637,4 +637,28 @@ describe('skills', () => {
     await bee.run('skills');
     expect(bee.lines.join('\n')).toContain('skipped');
   });
+
+  it('sends nothing to an AI until the user agrees', async () => {
+    const bee = harness();
+    expect(await bee.run('skills', 'auto')).toBe(1);
+    expect(bee.questions).toHaveLength(1);
+    expect(bee.lines).toContain('Nothing sent.');
+  });
+
+  it('lets the signed-in AI settle versions and says what is left', async () => {
+    const bee = harness();
+    bee.context.ask = async () => true;
+    bee.skillLibrary.candidates = [
+      { ...candidate('one', 'review-pr'), preview: 'a\nonly one', modifiedAt: 1 },
+      { ...candidate('two', 'review-pr'), preview: 'a\nonly two', modifiedAt: 2 },
+    ];
+    await bee.run('skills', 'import');
+    bee.clis.claude.login = { login: LoginState.signedIn, identity: 'bee@x.dev' };
+    bee.chatRunners.claude.answers = [
+      [{ type: 'message', text: '{"verdict":"pick","id":"two"}' }, { type: 'turn-completed' }],
+    ];
+    bee.lines.length = 0;
+    expect(await bee.run('skills', 'auto')).toBe(0);
+    expect(bee.lines).toContain('1 resolved automatically, 0 need you.');
+  });
 });

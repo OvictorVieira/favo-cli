@@ -47,6 +47,7 @@ export const CommandKind = {
   skillsList: 'skillsList',
   skillsImport: 'skillsImport',
   skillsSkip: 'skillsSkip',
+  skillsAuto: 'skillsAuto',
   skillsUse: 'skillsUse',
   machineList: 'machineList',
   machineAdd: 'machineAdd',
@@ -239,6 +240,8 @@ function parseSkills(base: Omit<Command, 'kind'>, action?: string, name?: string
       return { ...base, kind: CommandKind.skillsImport };
     case 'skip':
       return { ...base, kind: CommandKind.skillsSkip };
+    case 'auto':
+      return { ...base, kind: CommandKind.skillsAuto };
     case 'use': {
       const usage = 'favo skills use <skill> <version>';
       return { ...base, kind: CommandKind.skillsUse, name: required(name, usage), target: required(version, usage) };

@@ -115,6 +115,15 @@ export class ChatService {
     return this.viewOf(switched);
   }
 
+  canChatWith(provider: ProviderId) {
+    return this.runners[provider] !== undefined;
+  }
+
+  async discard(id: string) {
+    this.stop(id);
+    await this.conversations.remove(id);
+  }
+
   async end(id: string) {
     await this.conversations.require(id);
     this.stop(id);

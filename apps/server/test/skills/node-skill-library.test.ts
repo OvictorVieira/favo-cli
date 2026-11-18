@@ -164,3 +164,27 @@ test('an agent folder shared with another tool gets no skill folders of its own'
   expect(await lstat(`${home}/.codex/skills`).catch(() => undefined)).toBeUndefined();
   expect((await lstat(`${home}/.agents/skills/debug-root-cause`)).isSymbolicLink()).toBe(true);
 });
+
+test('ignores backup folders left beside a skill', async () => {
+  await writeSkill('.claude/skills', 'review-pr', 'current');
+  await writeSkill('.codex/skills', 'review-pr.local-backup-20261111212051', 'old');
+  const { candidates } = await library.discover(() => {});
+  expect(candidates.map((item) => item.source)).toEqual([`${home}/.claude/skills/review-pr`]);
+});
+
+test('reports when each version was last changed', async () => {
+  await writeSkill('.claude/skills', 'review-pr', 'current');
+  const { candidates } = await library.discover(() => {});
+  expect(candidates[0]?.modifiedAt).toBeGreaterThan(0);
+});
+
+test('reads a skill whose frontmatter is not valid YAML', async () => {
+  await mkdir(`${home}/.claude/skills/loose`, { recursive: true });
+  await writeFile(
+    `${home}/.claude/skills/loose/SKILL.md`,
+    '---\nname: loose\ndescription: Use when: the user says "go": do it\n---\nbody\n'
+  );
+  const { candidates, problems } = await library.discover(() => {});
+  expect(problems).toEqual([]);
+  expect(candidates[0]).toMatchObject({ name: 'loose', description: 'Use when: the user says "go": do it' });
+});

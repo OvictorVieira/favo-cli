@@ -92,4 +92,22 @@ describe('SkillService', () => {
     expect(app.state.skillsView.phase).toBe('failed');
     expect(app.state.skillsView.problems).toEqual(['hub went away']);
   });
+  test('settles what the AI can and keeps the rest for the user', async () => {
+    const app = await getApp();
+    mockDb.skills.decision = 'enabled';
+    mockDb.skills.conflicts = ['review-pr', 'ralph'].map((name) => ({
+      name,
+      candidates: [
+        { id: `${name}-a`, name, description: 'x', source: '/a', fingerprint: 'a', preview: 'a', warnings: [] },
+        { id: `${name}-b`, name, description: 'x', source: '/b', fingerprint: 'b', preview: 'b', warnings: [] },
+      ],
+    }));
+    mockDb.skills.autoPicks = { 'review-pr': 'review-pr-b' };
+    await app.state.openSkills();
+    await app.state.autoResolveSkillVersions();
+    expect(mockDb.skills.chosen).toEqual([{ name: 'review-pr', candidateId: 'review-pr-b' }]);
+    expect(app.state.skillsView.conflicts.map((conflict) => conflict.name)).toEqual(['ralph']);
+    expect(app.state.toast?.message).toBe('1 resolved automatically, 1 need you.');
+    expect(app.state.isSkillsJudging).toBe(false);
+  });
 });

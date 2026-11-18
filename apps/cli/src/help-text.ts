@@ -50,6 +50,9 @@ Skills
   favo skills import                 after you agree, copy your agent skills into
                                      one catalog and link it for every agent;
                                      replaced copies are backed up first
+  favo skills auto                   after you agree, let your signed-in AI settle
+                                     the versions that differ, keeping only what
+                                     it cannot settle for you
   favo skills use <skill> <version>  pick one version when the same name differs
   favo skills skip                   keep skills separate for each agent
 

@@ -29,6 +29,7 @@ const AgentHomes: Record<Exclude<ProviderId, 'opencode'>, { marker: string; root
     roots: ['.gemini/antigravity-cli/skills', '.gemini/config/skills', '.gemini/skills'],
   },
 };
+const BackupFolder = /\.(local-)?backup/;
 const OmittedFolders = new Set(['.git', 'node_modules', '__pycache__']);
 const MaximumBundleBytes = 80 * 1024 * 1024;
 const PortableMarker = '<!-- FAVO PORTABLE SKILL -->';
@@ -102,7 +103,7 @@ export class NodeSkillLibrary extends SkillLibrary {
           return;
         }
         for (const entry of (await readdir(target)).sort()) {
-          if (!OmittedFolders.has(entry) && !entry.startsWith('.'))
+          if (!OmittedFolders.has(entry) && !entry.startsWith('.') && !BackupFolder.test(entry))
             await walk.call(this, `${folder}/${entry}`, depth + 1);
         }
       } catch (error) {
@@ -291,8 +292,7 @@ export class NodeSkillLibrary extends SkillLibrary {
     await collect(source, '');
     const markdown = files.find((file) => file.path === 'SKILL.md')?.bytes.toString('utf8') ?? '';
     const frontmatter = /^---\r?\n([\s\S]*?)\r?\n---(?:\r?\n|$)/.exec(markdown);
-    const parsed: unknown = frontmatter ? Bun.YAML.parse(frontmatter[1]!) : {};
-    const metadata = isRecord(parsed) ? parsed : {};
+    const metadata = frontmatter ? parseFrontmatter(frontmatter[1]!) : {};
     const rawName = typeof metadata.name === 'string' ? metadata.name : basename(source);
     const name = rawName
       .toLowerCase()
@@ -302,7 +302,7 @@ export class NodeSkillLibrary extends SkillLibrary {
     const description =
       typeof metadata.description === 'string' ? metadata.description.trim() : `Use the ${name} workflow.`;
     const hash = createHash('sha256');
-    for (const file of files) hash.update(`${file.path}\0${file.mode}\0${file.bytes.length}\0`).update(file.bytes);
+    for (const file of files) hash.update(`${file.path}\0${file.bytes.length}\0`).update(file.bytes);
     const fingerprint = hash.digest('hex');
     const id = createHash('sha256').update(source).update(fingerprint).digest('hex').slice(0, 24);
     const warnings: string[] = [];
@@ -326,8 +326,31 @@ export class NodeSkillLibrary extends SkillLibrary {
       files,
       markdown,
       metadata,
-      candidate: { id, name, description, source, fingerprint, preview: markdown.slice(0, 16000), warnings },
+      candidate: {
+        id,
+        name,
+        description,
+        source,
+        fingerprint,
+        preview: markdown.slice(0, 16000),
+        warnings,
+        modifiedAt: (await stat(`${source}/SKILL.md`)).mtimeMs,
+      },
     };
+  }
+}
+
+function parseFrontmatter(text: string): Record<string, unknown> {
+  try {
+    const parsed: unknown = Bun.YAML.parse(text);
+    return isRecord(parsed) ? parsed : {};
+  } catch {
+    const metadata: Record<string, unknown> = {};
+    for (const line of text.split(/\r?\n/)) {
+      const pair = /^([A-Za-z][\w-]*):\s*(.*)$/.exec(line);
+      if (pair) metadata[pair[1]!] = pair[2]!.trim().replace(/^(["'])(.*)\1$/, '$2');
+    }
+    return metadata;
   }
 }
 

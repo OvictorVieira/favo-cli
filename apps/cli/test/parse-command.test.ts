@@ -73,6 +73,7 @@ describe('favo skills', () => {
   it('imports, skips and chooses a version', () => {
     expect(parseCommand(['skills', 'import']).kind).toBe('skillsImport');
     expect(parseCommand(['skills', 'skip']).kind).toBe('skillsSkip');
+    expect(parseCommand(['skills', 'auto']).kind).toBe('skillsAuto');
     expect(parseCommand(['skills', 'use', 'review-pr', 'abc'])).toMatchObject({
       kind: 'skillsUse',
       name: 'review-pr',

@@ -36,6 +36,19 @@ export class TestSkillRepository implements ISkillRepository {
     return view();
   }
 
+  async autoResolveSkills() {
+    const picks = mockDb.skills.autoPicks;
+    const settled = mockDb.skills.conflicts.filter((conflict) => picks[conflict.name] !== undefined);
+    for (const conflict of settled)
+      mockDb.skills.chosen.push({ name: conflict.name, candidateId: picks[conflict.name]! });
+    mockDb.skills.conflicts = mockDb.skills.conflicts.filter((conflict) => picks[conflict.name] === undefined);
+    mockDb.skills.phase = nextPhase();
+    return {
+      ...view(),
+      progress: `${settled.length} resolved automatically, ${mockDb.skills.conflicts.length} need you.`,
+    };
+  }
+
   async resolveSkill(name: string, candidateId: string) {
     mockDb.skills.chosen.push({ name, candidateId });
     mockDb.skills.conflicts = mockDb.skills.conflicts.filter((conflict) => conflict.name !== name);

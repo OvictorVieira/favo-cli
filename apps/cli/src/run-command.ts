@@ -18,6 +18,7 @@ import { getSeatStatus } from '@favo/contracts/rpc/seats/get-seat-status';
 import { inspectSeat } from '@favo/contracts/rpc/seats/inspect-seat';
 import { provisionSeat } from '@favo/contracts/rpc/seats/provision-seat';
 import { repairSeats } from '@favo/contracts/rpc/seats/repair-seats';
+import { autoResolveSkills } from '@favo/contracts/rpc/skills/auto-resolve-skills';
 import { getSkills } from '@favo/contracts/rpc/skills/get-skills';
 import { importSkills } from '@favo/contracts/rpc/skills/import-skills';
 import { resolveSkill } from '@favo/contracts/rpc/skills/resolve-skill';
@@ -120,6 +121,20 @@ export async function runCommand(parsed: Command, context: CommandContext) {
       return 0;
     case CommandKind.skillsImport:
       return importSkillCatalog(context, isJson);
+    case CommandKind.skillsAuto: {
+      const agreed = await context.ask(
+        'Send the versions that differ to your signed-in AI (Claude first, then Codex and others) so it can say which one to keep?'
+      );
+      if (!agreed) {
+        print('Nothing sent.');
+        return 1;
+      }
+      print('Comparing versions...');
+      const settled = await client.call(autoResolveSkills, {});
+      const exitCode = printSkills(context, settled, isJson);
+      if (!isJson) print(settled.progress);
+      return exitCode;
+    }
     case CommandKind.skillsUse:
       return printSkills(
         context,
