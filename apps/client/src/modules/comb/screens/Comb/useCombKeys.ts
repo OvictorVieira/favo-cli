@@ -34,6 +34,7 @@ export function useCombKeys(props: CombKeys) {
   const openAddMachine = useApp((state) => state.openAddMachine);
   const refreshMachine = useApp((state) => state.refreshMachine);
   const openThemePicker = useApp((state) => state.openThemePicker);
+  const openSkills = useApp((state) => state.openSkills);
   const openDirectoryPicker = useApp((state) => state.openDirectoryPicker);
   const openUsage = useApp((state) => state.openUsage);
   const openProviderClis = useApp((state) => state.openProviderClis);
@@ -73,6 +74,7 @@ export function useCombKeys(props: CombKeys) {
     else if (key.name === 'm') void error.handle(openAddMachine)();
     else if (key.name === 'r') void error.handle(onRefresh)();
     else if (key.name === 't') void error.handle(openThemePicker)();
+    else if (key.name === 'e') void error.handle(openSkills)();
     else if (key.name === 'd') void error.handle(openDirectoryPicker)();
     else if (key.name === 'u') void error.handle(openUsage)();
     else if (key.name === 'v') void error.handle(openProviderClis)();

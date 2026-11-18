@@ -6,7 +6,10 @@ export class MemorySkillLibrary extends SkillLibrary {
   problems: string[] = [];
   adopted: string[] = [];
   published: CatalogSkill[] = [];
+  publishProblems: string[] = [];
+  scans = 0;
   async discover(progress: (message: string) => void) {
+    this.scans++;
     progress('Scanning local skills');
     return { candidates: this.candidates, problems: this.problems };
   }
@@ -15,6 +18,6 @@ export class MemorySkillLibrary extends SkillLibrary {
   }
   async publish(skills: CatalogSkill[]) {
     this.published = skills;
-    return [];
+    return this.publishProblems;
   }
 }

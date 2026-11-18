@@ -23,7 +23,7 @@ export class SeatsService {
     private readonly accounts: AccountRepository,
     private readonly providers: ProvidersService,
     private readonly paths: FavoPaths,
-    private readonly skills?: SkillsService
+    private readonly skills: SkillsService
   ) {}
 
   async status(account: string, provider: ProviderId): Promise<SeatStatus> {
@@ -86,7 +86,7 @@ export class SeatsService {
 
   async reconcile(account: string, provider: ProviderId) {
     await this.assertAccount(account);
-    await this.skills?.ensureProvider(provider);
+    await this.skills.ensureProvider();
     const linked: string[] = [];
     const problems: { name: string; state: SharedItemState }[] = [];
     if (isPersonalAccount(account)) return { account, provider, linked, problems };

@@ -23,6 +23,7 @@ export const CombHelpKeys = [
   ['r / R', 'refresh / mend shared links'],
   ['d', 'choose the launch folder'],
   ['t', 'change the theme'],
+  ['e', 'share skills between agents'],
   ['q', 'quit'],
   ['↗ → ↘', 'ahead of, on or under pace'],
   ['▄ ▂ ▁ █', 'left, next reset, rest, pace'],

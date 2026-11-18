@@ -7,6 +7,7 @@ import { createSelectionService, type SelectionService } from '@/modules/comb/ap
 import { createDirectoryService, type DirectoryService } from '@/modules/directories/app/services/DirectoryService';
 import { createMachineService, type MachineService } from '@/modules/machines/app/services/MachineService';
 import { createSessionService, type SessionService } from '@/modules/sessions/app/services/SessionService';
+import { createSkillService, type SkillService } from '@/modules/skills/app/services/SkillService';
 import { createThemeService, type ThemeService } from '@/modules/themes/app/services/ThemeService';
 import { createThreadService, type ThreadService } from '@/modules/threads/app/services/ThreadService';
 import { createProviderCliService, type ProviderCliService } from '@/modules/updates/app/services/ProviderCliService';
@@ -16,6 +17,7 @@ import { createUsageService, type UsageService } from '@/modules/usage/app/servi
 import { createToastService, type ToastService } from '@/shared/app/services/ToastService';
 
 export type AppService = ThemeService &
+  SkillService &
   DirectoryService &
   FleetService &
   SelectionService &
@@ -36,6 +38,7 @@ export const useApp = create<AppService>()(
   computed((...args) =>
     composeServices(
       createThemeService(...args),
+      createSkillService(...args),
       createFleetService(...args),
       createSelectionService(...args),
       createDirectoryService(...args),

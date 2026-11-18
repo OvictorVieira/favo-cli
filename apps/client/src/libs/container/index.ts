@@ -4,6 +4,7 @@ import type { IDirectoryRepository } from '@/modules/directories/app/repositorie
 import type { IMachineRepository } from '@/modules/machines/app/repositories/IMachineRepository';
 import type { IDesktopRepository } from '@/modules/sessions/app/repositories/IDesktopRepository';
 import type { ITerminalRepository } from '@/modules/sessions/app/repositories/ITerminalRepository';
+import type { ISkillRepository } from '@/modules/skills/app/repositories/ISkillRepository';
 import type { IThemeRepository } from '@/modules/themes/app/repositories/IThemeRepository';
 import type { IThreadRepository } from '@/modules/threads/app/repositories/IThreadRepository';
 import type { IProviderCliRepository } from '@/modules/updates/app/repositories/IProviderCliRepository';
@@ -18,6 +19,7 @@ export interface InjectableItems {
   ITerminalRepository: ITerminalRepository;
   IDesktopRepository: IDesktopRepository;
   IThemeRepository: IThemeRepository;
+  ISkillRepository: ISkillRepository;
   IThreadRepository: IThreadRepository;
   IUsageRepository: IUsageRepository;
   IProviderCliRepository: IProviderCliRepository;

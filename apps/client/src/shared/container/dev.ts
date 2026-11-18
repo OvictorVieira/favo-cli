@@ -5,6 +5,7 @@ import { TestDirectoryRepository } from '@/modules/directories/app/repositories/
 import { TestMachineRepository } from '@/modules/machines/app/repositories/TestMachineRepository';
 import { TestDesktopRepository } from '@/modules/sessions/app/repositories/TestDesktopRepository';
 import { TestTerminalRepository } from '@/modules/sessions/app/repositories/TestTerminalRepository';
+import { TestSkillRepository } from '@/modules/skills/app/repositories/TestSkillRepository';
 import { TestThemeRepository } from '@/modules/themes/app/repositories/TestThemeRepository';
 import { TestThreadRepository } from '@/modules/threads/app/repositories/TestThreadRepository';
 import { TestProviderCliRepository } from '@/modules/updates/app/repositories/TestProviderCliRepository';
@@ -20,6 +21,7 @@ export function bootstrapDevContainer() {
   container.register('ITerminalRepository', new TestTerminalRepository());
   container.register('IDesktopRepository', new TestDesktopRepository());
   container.register('IThemeRepository', new TestThemeRepository());
+  container.register('ISkillRepository', new TestSkillRepository());
   container.register('IThreadRepository', new TestThreadRepository());
   container.register('IUsageRepository', new TestUsageRepository());
   container.register('IProviderCliRepository', new TestProviderCliRepository());

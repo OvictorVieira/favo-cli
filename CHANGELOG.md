@@ -4,7 +4,7 @@
 
 ### Added
 
-- `favo skills import` copies your agent skills into one shared catalog after you agree, and links it for every agent so a skill works in Claude, Codex, Copilot, Cursor, OpenCode and Antigravity. When the same name has different content, `favo skills use <skill> <version>` picks one; replaced copies are backed up first, and skills that need a plugin or MCP tool say so.
+- favo offers to share your agent skills the first time it opens, and again with `e` on the comb or `favo skills import`. After you agree it copies them into one shared catalog and links it for every installed agent, so a skill works in Claude, Codex, Copilot, Cursor, OpenCode and Antigravity. When the same name has different content, favo stops and asks which version to keep (`favo skills use <skill> <version>` on the command line). Replaced copies are backed up first, files left out (such as `.env`) are listed, and skills that need a plugin or MCP tool say so. Say no once with `s` and favo does not ask again.
 - Start favo with `--dangerously-skip-permissions` to skip agent approvals for this run, including provider switches and resumed sessions. Without it, favo keeps normal provider permissions.
 - Press `shift+w` on a seat to reopen a saved chat and continue its conversation.
 

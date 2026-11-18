@@ -6,6 +6,7 @@ import { ApiDirectoryRepository } from '@/modules/directories/app/repositories/A
 import { ApiMachineRepository } from '@/modules/machines/app/repositories/ApiMachineRepository';
 import { ApiDesktopRepository } from '@/modules/sessions/app/repositories/ApiDesktopRepository';
 import { ApiTerminalRepository } from '@/modules/sessions/app/repositories/ApiTerminalRepository';
+import { ApiSkillRepository } from '@/modules/skills/app/repositories/ApiSkillRepository';
 import { ApiThemeRepository } from '@/modules/themes/app/repositories/ApiThemeRepository';
 import { ApiThreadRepository } from '@/modules/threads/app/repositories/ApiThreadRepository';
 import { ApiProviderCliRepository } from '@/modules/updates/app/repositories/ApiProviderCliRepository';
@@ -25,6 +26,7 @@ export function bootstrapAppContainer(input: {
   container.register('ITerminalRepository', new ApiTerminalRepository(client));
   container.register('IDesktopRepository', new ApiDesktopRepository(client));
   container.register('IThemeRepository', new ApiThemeRepository(client));
+  container.register('ISkillRepository', new ApiSkillRepository(client));
   container.register('IThreadRepository', new ApiThreadRepository(client));
   container.register('IUsageRepository', new ApiUsageRepository(client));
   container.register('IProviderCliRepository', new ApiProviderCliRepository(client));

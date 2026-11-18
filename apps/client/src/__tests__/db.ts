@@ -18,6 +18,7 @@ import type {
 import type { Machine } from '@favo/domain/machines/machine';
 import { HookedProviders, hookedSpecOf, ProviderId, ProviderOrder, Providers } from '@favo/domain/providers/provider';
 import type { DomainError } from '@favo/domain/shared/domain-error';
+import { type CatalogSkill, SkillDecision, SkillPhase, type SkillsView } from '@favo/domain/skills/skill';
 import type { TerminalPlan } from '@favo/domain/terminal/terminal-plan';
 import { BuiltInThemes } from '@favo/domain/themes/built-in-themes';
 import { type Theme, ThemeSource } from '@favo/domain/themes/theme';
@@ -324,6 +325,28 @@ function seedInspection(): SeatInspection {
   };
 }
 
+function seedSkills() {
+  const importable: CatalogSkill[] = [
+    {
+      name: 'debug-root-cause',
+      description: 'Systematic diagnosis',
+      source: '/skills/debug-root-cause',
+      fingerprint: 'debug',
+      rejected: [],
+      warnings: [],
+    },
+  ];
+  return {
+    decision: SkillDecision.skipped as SkillsView['decision'],
+    phase: SkillPhase.idle as SkillsView['phase'],
+    skills: [] as CatalogSkill[],
+    conflicts: [] as SkillsView['conflicts'],
+    importable,
+    imports: 0,
+    chosen: [] as { name: string; candidateId: string }[],
+  };
+}
+
 function seedThemeList(): ThemeList {
   const custom: Theme = {
     ...BuiltInThemes[0]!,
@@ -400,6 +423,7 @@ export const mockDb = {
   threadFailures: {} as Record<string, Error>,
   inspection: seedInspection(),
   themeList: seedThemeList(),
+  skills: seedSkills(),
   directoryTrees: seedDirectoryTrees(),
   discovered: seedDiscovered(),
   desktopApps: seedDesktopApps(),
@@ -454,6 +478,7 @@ export const mockDb = {
     this.threadFailures = {};
     this.inspection = seedInspection();
     this.themeList = seedThemeList();
+    this.skills = seedSkills();
     this.directoryTrees = seedDirectoryTrees();
     this.discovered = seedDiscovered();
     this.desktopApps = seedDesktopApps();

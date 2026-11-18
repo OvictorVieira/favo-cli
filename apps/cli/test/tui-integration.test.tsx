@@ -6,6 +6,7 @@ import { createAccount } from '@favo/contracts/rpc/accounts/create-account';
 import { listAccounts } from '@favo/contracts/rpc/accounts/list-accounts';
 import { addMachine } from '@favo/contracts/rpc/machines/add-machine';
 import { provisionSeat } from '@favo/contracts/rpc/seats/provision-seat';
+import { skipSkills } from '@favo/contracts/rpc/skills/skip-skills';
 import { recordThread } from '@favo/contracts/rpc/threads/record-thread';
 import { recordProviderUpdate } from '@favo/contracts/rpc/updates/record-provider-update';
 import { LoginState } from '@favo/contracts/rpc/views';
@@ -22,13 +23,18 @@ let dispose: (() => Promise<void>) | undefined;
 
 async function openFleet(
   callerEnv?: Record<string, string>,
-  options: { rateLimited?: boolean; failRun?: number; alsoSignedIn?: ('codex' | 'antigravity' | 'opencode')[] } = {}
+  options: {
+    rateLimited?: boolean;
+    failRun?: number;
+    alsoSignedIn?: ('codex' | 'antigravity' | 'opencode')[];
+  } = {}
 ) {
   const mac = createTestServer({ callerEnv });
   const devbox = createTestServer({ hostname: 'devbox' });
   await seedClaudeBase(mac.fileSystem);
   await seedClaudeBase(devbox.fileSystem);
   await mac.client.call(createAccount, { name: 'work' });
+  await mac.client.call(skipSkills, {});
   await mac.client.call(addMachine, { target: 'bee@devbox' });
   mac.remotes.connect('devbox', devbox.router);
   mac.clis.claude.login = { login: LoginState.signedIn, identity: 'mac@bee.dev', plan: 'max' };
@@ -62,6 +68,40 @@ async function openFleet(
   await readsSettled();
   await view.flush();
   return { ...view, mac, devbox, copied, plans };
+}
+
+async function openFleetWithSkills() {
+  const mac = createTestServer();
+  await seedClaudeBase(mac.fileSystem);
+  mac.skillLibrary.candidates = [
+    {
+      id: 'debug',
+      name: 'debug-root-cause',
+      description: 'Systematic diagnosis',
+      source: '/skills/debug',
+      fingerprint: 'debug',
+      preview: 'Find the cause',
+      warnings: [],
+    },
+  ];
+  mac.clis.claude.login = { login: LoginState.signedIn, identity: 'mac@bee.dev', plan: 'max' };
+  bootstrapAppContainer({
+    transport: mac.router,
+    clipboardGateway: {
+      async copy() {
+        return true;
+      },
+    },
+    terminalGateway: {
+      async run() {
+        return { exitCode: 0, rateLimitDetected: false };
+      },
+    },
+  });
+  useApp.setState(useApp.getInitialState(), true);
+  const view = await testRender(<App onQuit={() => {}} />, { width: 130, height: 36, useMouse: true });
+  dispose = view.dispose;
+  return { ...view, mac };
 }
 
 async function plansReach(plans: unknown[], count: number) {
@@ -264,6 +304,18 @@ describe('tokens on a real backend', () => {
 });
 
 describe('the TUI on a real backend', () => {
+  test('offers to share skills on the first start, and imports them only after enter', async () => {
+    const { mac, waitForFrame, renderOnce, captureCharFrame, mockInput, flush } = await openFleetWithSkills();
+    await waitForFrame((frame) => frame.includes('Share your agent skills with every agent?'));
+    expect(mac.skillLibrary.adopted).toEqual([]);
+    mockInput.pressKey('RETURN');
+    await flush();
+    while (useApp.getState().skillsView.phase !== 'done') await Bun.sleep(5);
+    await flush();
+    await renderOnce();
+    expect(captureCharFrame()).toContain('⬢ debug-root-cause');
+    expect(mac.skillLibrary.adopted).toEqual(['debug']);
+  });
   test('shows both machines through the contracts', async () => {
     const { captureCharFrame } = await openFleet();
     const frame = captureCharFrame();

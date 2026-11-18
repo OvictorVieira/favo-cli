@@ -60,13 +60,79 @@ test('opening an agent publishes the catalog only after consent', async () => {
   await server.client.call(provisionSeat, { account: 'personal', provider: 'codex' });
   expect(server.skillLibrary.published.map((skill) => skill.name)).toEqual(['debug-root-cause']);
 });
-test('opening an agent stops when a skill changed into two different versions', async () => {
+test('opening an agent does not block when a skill changed into two different versions', async () => {
   const server = createTestServer();
   server.skillLibrary.candidates = [candidate('debug')];
   await server.client.call(importSkills, {});
   await settled(server);
+  server.skillLibrary.published = [];
   server.skillLibrary.candidates = [candidate('debug'), candidate('edited', 'debug-root-cause')];
-  await expect(server.client.call(provisionSeat, { account: 'personal', provider: 'claude' })).rejects.toThrow(
-    'choose which versions'
+  await server.client.call(provisionSeat, { account: 'personal', provider: 'claude' });
+  expect(server.skillLibrary.published).toEqual([]);
+  const view = await server.client.call(getSkills, {});
+  expect(view.conflicts[0]?.candidates.map((variant) => variant.id)).toEqual(['debug', 'edited']);
+});
+test('opening an agent does not block when linking a skill fails', async () => {
+  const server = createTestServer();
+  server.skillLibrary.candidates = [candidate('debug')];
+  await server.client.call(importSkills, {});
+  await settled(server);
+  server.skillLibrary.publishProblems = ['debug-root-cause: Unreviewed skill at /home/x'];
+  await server.client.call(provisionSeat, { account: 'personal', provider: 'claude' });
+  expect((await server.client.call(getSkills, {})).problems).toEqual(['debug-root-cause: Unreviewed skill at /home/x']);
+});
+test('choosing a version needs the user to have agreed to share skills', async () => {
+  const server = createTestServer();
+  server.skillLibrary.candidates = [candidate('read-only', 'review-pr'), candidate('edits', 'review-pr')];
+  await expect(server.client.call(resolveSkill, { name: 'review-pr', candidateId: 'edits' })).rejects.toThrow('Agree');
+  expect(server.skillLibrary.adopted).toEqual([]);
+});
+test('two imports at once scan only once', async () => {
+  const server = createTestServer();
+  server.skillLibrary.candidates = [candidate('debug')];
+  await Promise.all([server.client.call(importSkills, {}), server.client.call(importSkills, {})]);
+  await settled(server);
+  expect(server.skillLibrary.scans).toBe(1);
+});
+test('an unreadable folder is reported without failing the import', async () => {
+  const server = createTestServer();
+  server.skillLibrary.candidates = [candidate('debug')];
+  server.skillLibrary.problems = ['/skills/broken: Skill bundle exceeds 80 MB.'];
+  await server.client.call(importSkills, {});
+  const view = await settled(server);
+  expect(view.phase).toBe('done');
+  expect(view.problems).toEqual(['/skills/broken: Skill bundle exceeds 80 MB.']);
+});
+test('reading the catalog scans once, not on every read', async () => {
+  const server = createTestServer();
+  server.skillLibrary.candidates = [candidate('debug')];
+  await server.client.call(importSkills, {});
+  await settled(server);
+  const scans = server.skillLibrary.scans;
+  await server.client.call(getSkills, {});
+  await server.client.call(getSkills, {});
+  expect(server.skillLibrary.scans).toBe(scans);
+});
+test('opening an agent while an import runs does not wait for it', async () => {
+  const server = createTestServer();
+  server.skillLibrary.candidates = [candidate('debug')];
+  await server.client.call(importSkills, {});
+  await server.client.call(provisionSeat, { account: 'personal', provider: 'claude' });
+  expect(server.skillLibrary.scans).toBe(1);
+});
+test('a launch that finds nothing wrong clears an old conflict notice', async () => {
+  const server = createTestServer();
+  server.skillLibrary.candidates = [candidate('debug'), candidate('edited', 'debug-root-cause')];
+  await server.client.call(importSkills, {});
+  expect((await settled(server)).phase).toBe('conflicts');
+  server.skillLibrary.candidates = [candidate('debug')];
+  await server.client.call(provisionSeat, { account: 'personal', provider: 'claude' });
+  expect((await server.client.call(getSkills, {})).phase).toBe('done');
+});
+test('a skipped user is told sharing is off, not to agree again', async () => {
+  const server = createTestServer();
+  await server.client.call(skipSkills, {});
+  await expect(server.client.call(resolveSkill, { name: 'review-pr', candidateId: 'x' })).rejects.toThrow(
+    'sharing is off'
   );
 });

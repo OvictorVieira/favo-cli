@@ -1,18 +1,33 @@
 import { createHash, randomUUID } from 'node:crypto';
-import { chmod, lstat, mkdir, readdir, readFile, realpath, rename, stat, symlink, writeFile } from 'node:fs/promises';
+import {
+  chmod,
+  cp,
+  lstat,
+  mkdir,
+  readdir,
+  readFile,
+  realpath,
+  rename,
+  rm,
+  stat,
+  symlink,
+  writeFile,
+} from 'node:fs/promises';
 import { basename, dirname, isAbsolute, relative, resolve } from 'node:path';
 import type { ProviderId } from '@favo/domain/providers/provider';
 import { assertDomain, DomainErrorCode } from '@favo/domain/shared/domain-error';
 import { type CatalogSkill, type SkillCandidate, SkillName } from '@favo/domain/skills/skill';
 import { SkillLibrary } from './skill-library';
 
-const NativeSkillRoots: Record<ProviderId, string[]> = {
-  claude: ['.claude/skills'],
-  codex: ['.agents/skills', '.codex/skills'],
-  cursor: ['.cursor/skills'],
-  copilot: ['.copilot/skills'],
-  opencode: ['.config/opencode/skills'],
-  antigravity: ['.gemini/config/skills', '.gemini/antigravity-cli/skills', '.gemini/skills'],
+const AgentHomes: Record<Exclude<ProviderId, 'opencode'>, { marker: string; roots: string[] }> = {
+  claude: { marker: '.claude', roots: ['.claude/skills'] },
+  codex: { marker: '.codex', roots: ['.agents/skills', '.codex/skills'] },
+  cursor: { marker: '.cursor', roots: ['.cursor/skills'] },
+  copilot: { marker: '.copilot', roots: ['.copilot/skills'] },
+  antigravity: {
+    marker: '.gemini/antigravity-cli',
+    roots: ['.gemini/antigravity-cli/skills', '.gemini/config/skills', '.gemini/skills'],
+  },
 };
 const OmittedFolders = new Set(['.git', 'node_modules', '__pycache__']);
 const MaximumBundleBytes = 80 * 1024 * 1024;
@@ -46,10 +61,7 @@ export class NodeSkillLibrary extends SkillLibrary {
     const problems: string[] = [];
     const visited = new Set<string>();
     this.bundles.clear();
-    const roots = Object.values(NativeSkillRoots)
-      .flat()
-      .map((path) => `${this.home}/${path}`);
-    roots.push(`${this.configHome}/opencode/skills`);
+    const roots = this.agents().flatMap((agent) => agent.roots);
     const manifest = await readFile(`${this.home}/.claude/plugins/installed_plugins.json`, 'utf8').catch(
       () => undefined
     );
@@ -109,69 +121,33 @@ export class NodeSkillLibrary extends SkillLibrary {
       'Skill changed during import. Scan again.'
     );
     const temporary = `${this.root}/skills/staging/${randomUUID()}`;
-    await mkdir(temporary, { recursive: true, mode: 0o700 });
-    for (const file of bundle.files) {
-      const destination = `${temporary}/${file.path}`;
-      await mkdir(dirname(destination), { recursive: true, mode: 0o700 });
-      const bytes = file.path === 'SKILL.md' ? Buffer.from(portableSkill(bundle, this.catalog)) : file.bytes;
-      await writeFile(destination, bytes, { mode: file.mode });
-      await chmod(destination, file.mode);
-    }
-    await mkdir(this.catalog, { recursive: true, mode: 0o700 });
+    let kept: string | undefined;
     const destination = `${this.catalog}/${candidate.name}`;
-    await this.backup(destination);
-    await rename(temporary, destination);
+    try {
+      await mkdir(temporary, { recursive: true, mode: 0o700 });
+      for (const file of bundle.files) {
+        const staged = `${temporary}/${file.path}`;
+        await mkdir(dirname(staged), { recursive: true, mode: 0o700 });
+        const bytes = file.path === 'SKILL.md' ? Buffer.from(portableSkill(bundle, this.catalog)) : file.bytes;
+        await writeFile(staged, bytes, { mode: file.mode });
+        await chmod(staged, file.mode);
+      }
+      await mkdir(this.catalog, { recursive: true, mode: 0o700 });
+      kept = await this.backup(destination);
+      await rename(temporary, destination);
+    } catch (error) {
+      if (kept) await this.move(kept, destination).catch(() => undefined);
+      await rm(temporary, { recursive: true, force: true });
+      throw error;
+    }
   }
 
   async publish(skills: CatalogSkill[]) {
     const problems: string[] = [];
-    const roots = [
-      ...new Set([
-        ...Object.values(NativeSkillRoots)
-          .flat()
-          .map((path) => `${this.home}/${path}`),
-        `${this.configHome}/opencode/skills`,
-      ]),
-    ];
-    for (const root of roots) {
+    for (const root of await this.installedRoots()) {
       for (const skill of skills) {
         try {
-          const source = `${this.catalog}/${skill.name}`;
-          assertDomain(
-            await stat(`${source}/SKILL.md`).catch(() => undefined),
-            DomainErrorCode.invalidConfig,
-            `Catalog skill missing: ${skill.name}`
-          );
-          const destination = `${root}/${skill.name}`;
-          if ((await realpath(destination).catch(() => undefined)) === (await realpath(source))) continue;
-          const existing = await lstat(destination).catch(() => undefined);
-          if (existing) {
-            const current = await this.bundle(destination);
-            assertDomain(
-              current.candidate.name === skill.name &&
-                [skill.fingerprint, ...skill.rejected].includes(current.candidate.fingerprint),
-              DomainErrorCode.invalidParams,
-              `Unreviewed skill at ${destination}. Import again before replacing it.`
-            );
-            await this.backup(destination);
-          }
-          for (const bundle of this.bundles.values()) {
-            if (
-              bundle.candidate.name !== skill.name ||
-              !isWithin(root, bundle.candidate.source) ||
-              bundle.candidate.source === destination
-            )
-              continue;
-            if (!(await lstat(bundle.candidate.source).catch(() => undefined))) continue;
-            assertDomain(
-              [skill.fingerprint, ...skill.rejected].includes(bundle.candidate.fingerprint),
-              DomainErrorCode.invalidParams,
-              `Choose which ${skill.name} to keep before syncing.`
-            );
-            await this.backup(bundle.candidate.source);
-          }
-          await mkdir(root, { recursive: true });
-          await symlink(source, destination, process.platform === 'win32' ? 'junction' : 'dir');
+          await this.link(root, skill);
         } catch (error) {
           problems.push(`${skill.name}: ${error instanceof Error ? error.message : String(error)}`);
         }
@@ -180,16 +156,106 @@ export class NodeSkillLibrary extends SkillLibrary {
     return problems;
   }
 
+  private agents() {
+    const opencode = `${this.configHome}/opencode`;
+    return [
+      ...Object.values(AgentHomes).map(({ marker, roots }) => ({
+        marker: `${this.home}/${marker}`,
+        roots: roots.map((path) => `${this.home}/${path}`),
+      })),
+      { marker: opencode, roots: [`${opencode}/skills`] },
+    ];
+  }
+
+  private async installedRoots() {
+    const installed: string[] = [];
+    for (const agent of this.agents()) {
+      const hasAgent = await lstat(agent.marker).catch(() => undefined);
+      for (const [index, root] of agent.roots.entries()) {
+        const isPrimary = index === 0 && hasAgent;
+        if (isPrimary || (await lstat(root).catch(() => undefined))) installed.push(root);
+      }
+    }
+    return [...new Set(installed)];
+  }
+
+  private async link(root: string, skill: CatalogSkill) {
+    const source = `${this.catalog}/${skill.name}`;
+    assertDomain(
+      await stat(`${source}/SKILL.md`).catch(() => undefined),
+      DomainErrorCode.invalidConfig,
+      `Catalog skill missing: ${skill.name}`
+    );
+    const destination = `${root}/${skill.name}`;
+    if ((await realpath(destination).catch(() => undefined)) === (await realpath(source))) return;
+    const approved = [skill.fingerprint, ...skill.rejected];
+    if (await lstat(destination).catch(() => undefined)) {
+      const current = await this.bundle(destination);
+      assertDomain(
+        current.candidate.name === skill.name && approved.includes(current.candidate.fingerprint),
+        DomainErrorCode.invalidParams,
+        `Unreviewed skill at ${destination}. Import again before replacing it.`
+      );
+    }
+    const strays = await this.strayCopies(root, destination, skill.name, approved);
+    await mkdir(root, { recursive: true });
+    await this.replace(destination, source);
+    for (const stray of strays) await this.backup(stray);
+  }
+
+  private async strayCopies(root: string, destination: string, name: string, approved: string[]) {
+    const strays: string[] = [];
+    for (const { candidate } of this.bundles.values()) {
+      if (candidate.name !== name || !isWithin(root, candidate.source) || candidate.source === destination) continue;
+      if (!(await lstat(candidate.source).catch(() => undefined))) continue;
+      const current = await this.bundle(candidate.source);
+      assertDomain(
+        approved.includes(current.candidate.fingerprint),
+        DomainErrorCode.invalidParams,
+        `Choose which ${name} to keep before syncing.`
+      );
+      strays.push(candidate.source);
+    }
+    return strays;
+  }
+
+  private async replace(destination: string, source: string) {
+    const staged = `${destination}.favo-${randomUUID()}`;
+    await symlink(source, staged, process.platform === 'win32' ? 'junction' : 'dir');
+    let kept: string | undefined;
+    try {
+      kept = await this.backup(destination);
+      await rename(staged, destination);
+    } catch (error) {
+      if (kept) await this.move(kept, destination).catch(() => undefined);
+      await rm(staged, { force: true });
+      throw error;
+    }
+  }
+
   private async backup(path: string) {
-    if (!(await lstat(path).catch(() => undefined))) return;
+    if (!(await lstat(path).catch(() => undefined))) return undefined;
     await mkdir(this.backups, { recursive: true, mode: 0o700 });
-    await rename(path, `${this.backups}/${randomUUID()}-${basename(path)}`);
+    const kept = `${this.backups}/${randomUUID()}-${basename(path)}`;
+    await this.move(path, kept);
+    return kept;
+  }
+
+  private async move(from: string, to: string) {
+    try {
+      await rename(from, to);
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== 'EXDEV') throw error;
+      await cp(from, to, { recursive: true, verbatimSymlinks: true });
+      await rm(from, { recursive: true, force: true });
+    }
   }
 
   private async bundle(source: string): Promise<Bundle> {
     const root = await realpath(source);
     const files: BundleFile[] = [];
     let size = 0;
+    const omitted: string[] = [];
     const visited = new Set<string>();
     async function collect(folder: string, prefix: string): Promise<void> {
       const actual = await realpath(folder);
@@ -201,7 +267,10 @@ export class NodeSkillLibrary extends SkillLibrary {
       assertDomain(!visited.has(actual), DomainErrorCode.invalidParams, `Cyclic skill resources: ${prefix}`);
       visited.add(actual);
       for (const name of (await readdir(folder)).sort()) {
-        if (OmittedFolders.has(name) || name.startsWith('.env') || /^(auth|credentials)\.json$/.test(name)) continue;
+        if (OmittedFolders.has(name) || name.startsWith('.env') || /^(auth|credentials)\.json$/.test(name)) {
+          omitted.push(`${prefix}${name}`);
+          continue;
+        }
         const path = `${folder}/${name}`;
         const target = await realpath(path);
         assertDomain(
@@ -233,10 +302,15 @@ export class NodeSkillLibrary extends SkillLibrary {
     const description =
       typeof metadata.description === 'string' ? metadata.description.trim() : `Use the ${name} workflow.`;
     const hash = createHash('sha256');
-    for (const file of files) hash.update(file.path).update(file.bytes);
+    for (const file of files) hash.update(`${file.path}\0${file.mode}\0${file.bytes.length}\0`).update(file.bytes);
     const fingerprint = hash.digest('hex');
     const id = createHash('sha256').update(source).update(fingerprint).digest('hex').slice(0, 24);
     const warnings: string[] = [];
+    if (omitted.length > 0) {
+      warnings.push(
+        `Not copied (secrets, caches or build folders): ${omitted.join(', ')}. Only the backup of the original keeps them.`
+      );
+    }
     if (/mcp|plugin|perplexity/i.test(markdown))
       warnings.push(
         'External plugins/MCP tools must be available in the target agent; importing a skill does not install integrations.'

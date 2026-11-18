@@ -16,6 +16,7 @@ import { useCombKeys } from '@/modules/comb/screens/Comb/useCombKeys';
 import { DirectoryPicker } from '@/modules/directories/screens/DirectoryPicker';
 import { AddMachine } from '@/modules/machines/screens/AddMachine';
 import { HandoffDialog } from '@/modules/sessions/screens/HandoffDialog';
+import { SkillsScreen } from '@/modules/skills/screens/SkillsScreen';
 import { ThemePicker } from '@/modules/themes/screens/ThemePicker';
 import { ThreadPicker } from '@/modules/threads/screens/ThreadPicker';
 import type { ProviderCliTarget } from '@/modules/updates/app/services/ProviderCliService';
@@ -58,6 +59,8 @@ export function Comb({ onQuit }: { onQuit(): void }) {
   const isRenameAccountOpen = useApp((state) => state.isRenameAccountOpen);
   const isAddMachineOpen = useApp((state) => state.isAddMachineOpen);
   const isThemePickerOpen = useApp((state) => state.isThemePickerOpen);
+  const isSkillsOpen = useApp((state) => state.isSkillsOpen);
+  const offerSkills = useApp((state) => state.offerSkills);
   const isDirectoryPickerOpen = useApp((state) => state.isDirectoryPickerOpen);
   const isThreadPickerOpen = useApp((state) => state.isThreadPickerOpen);
   const needsThreadHook = useApp((state) => state.needsThreadHook);
@@ -80,6 +83,7 @@ export function Comb({ onQuit }: { onQuit(): void }) {
     isRenameAccountOpen ||
     isAddMachineOpen ||
     isThemePickerOpen ||
+    isSkillsOpen ||
     isDirectoryPickerOpen ||
     isThreadPickerOpen ||
     isUsageOpen;
@@ -193,6 +197,10 @@ export function Comb({ onQuit }: { onQuit(): void }) {
   }, []);
 
   useEffect(() => {
+    if (hasLoadedFleet) void error.handle(offerSkills)();
+  }, [hasLoadedFleet]);
+
+  useEffect(() => {
     if (selectedRow) scrollRef.current?.scrollChildIntoView(selectedRow.key);
   }, [selectedRow?.key]);
 
@@ -246,6 +254,7 @@ export function Comb({ onQuit }: { onQuit(): void }) {
       {isRenameAccountOpen && <RenameAccount />}
       {isAddMachineOpen && <AddMachine />}
       {isThemePickerOpen && <ThemePicker />}
+      {isSkillsOpen && <SkillsScreen />}
       {isDirectoryPickerOpen && <DirectoryPicker />}
       {isThreadPickerOpen && <ThreadPicker />}
       {!!confirmation && <ConfirmDialog confirmation={confirmation} onClose={() => setConfirmation(undefined)} />}

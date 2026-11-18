@@ -29,6 +29,7 @@ export function KeyBar(props: KeyBarProps) {
   const hasProviderClisBehind = useApp((state) => state.providerClisBehind.length > 0);
   const isUpdatingProviderClis = useApp((state) => state.isUpdatingProviderClis);
   const openThemePicker = useApp((state) => state.openThemePicker);
+  const openSkills = useApp((state) => state.openSkills);
   const openDirectoryPicker = useApp((state) => state.openDirectoryPicker);
   const openUsage = useApp((state) => state.openUsage);
   const openProviderClis = useApp((state) => state.openProviderClis);
@@ -74,6 +75,7 @@ export function KeyBar(props: KeyBarProps) {
       <KeyHint keys="m" label="machine" onPress={error.handle(openAddMachine)} />
       <KeyHint keys="r" label="refresh" onPress={error.handle(onRefreshPress)} />
       <KeyHint keys="t" label="theme" onPress={error.handle(openThemePicker)} />
+      <KeyHint keys="e" label="skills" onPress={error.handle(openSkills)} />
       <KeyHint keys="?" label="help" onPress={props.onHelp} />
       <KeyHint keys="q" label="quit" onPress={props.onQuit} />
     </box>

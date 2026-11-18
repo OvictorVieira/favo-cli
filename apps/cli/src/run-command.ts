@@ -34,7 +34,7 @@ import { HookState } from '@favo/domain/hooks/provider-hook';
 import { isOlderFavoError, type Machine, MachineState } from '@favo/domain/machines/machine';
 import { ProviderOrder, Providers } from '@favo/domain/providers/provider';
 import { DomainError } from '@favo/domain/shared/domain-error';
-import { SkillDecision, SkillPhase, type SkillsView } from '@favo/domain/skills/skill';
+import { isSkillWorkRunning, SkillDecision, SkillPhase, type SkillsView } from '@favo/domain/skills/skill';
 import { TerminalAction, type TerminalPlan } from '@favo/domain/terminal/terminal-plan';
 import { ThemeSource } from '@favo/domain/themes/theme';
 import { shortThreadId, threadAgeOf } from '@favo/domain/threads/thread';
@@ -339,22 +339,22 @@ async function importSkillCatalog(context: CommandContext, isJson: boolean) {
   }
   await context.client.call(importSkills, {});
   let view = await context.client.call(getSkills, {});
-  while (
-    view.phase === SkillPhase.scanning ||
-    view.phase === SkillPhase.importing ||
-    view.phase === SkillPhase.syncing
-  ) {
+  while (isSkillWorkRunning(view.phase)) {
     await Bun.sleep(SkillPollMilliseconds);
     view = await context.client.call(getSkills, {});
   }
   return printSkills(context, view, isJson);
 }
 
+function needsAttention(view: SkillsView) {
+  return view.phase === SkillPhase.conflicts || view.phase === SkillPhase.failed;
+}
+
 function printSkills(context: CommandContext, view: SkillsView, isJson: boolean) {
   const { print, paint } = context;
   if (isJson) {
     print(JSON.stringify(view, undefined, 2));
-    return view.phase === SkillPhase.conflicts || view.phase === SkillPhase.failed ? 1 : 0;
+    return needsAttention(view) ? 1 : 0;
   }
   if (view.decision === SkillDecision.pending) print('Skills are not shared yet. Run: favo skills import');
   if (view.decision === SkillDecision.skipped)
@@ -370,7 +370,7 @@ function printSkills(context: CommandContext, view: SkillsView, isJson: boolean)
     }
   }
   for (const problem of view.problems) print(`! ${problem}`);
-  return view.phase === SkillPhase.conflicts || view.phase === SkillPhase.failed ? 1 : 0;
+  return needsAttention(view) ? 1 : 0;
 }
 
 function printHooks(context: CommandContext, hooks: HookView[], isJson: boolean) {

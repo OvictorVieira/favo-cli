@@ -60,7 +60,7 @@ export function skillConflicts(candidates: SkillCandidate[], skills: CatalogSkil
     if (!group || group.every((candidate) => candidate.fingerprint === skill.fingerprint)) continue;
     if (!group.some((candidate) => candidate.fingerprint === skill.fingerprint))
       group.unshift({
-        id: `catalog:${skill.name}`,
+        id: catalogCandidateId(skill.name),
         name: skill.name,
         description: skill.description,
         source: 'Favo catalog',
@@ -70,4 +70,33 @@ export function skillConflicts(candidates: SkillCandidate[], skills: CatalogSkil
       });
   }
   return [...groups].map(([name, candidates]) => ({ name, candidates }));
+}
+
+const CatalogCandidatePrefix = 'catalog:';
+
+export function catalogCandidateId(name: string) {
+  return `${CatalogCandidatePrefix}${name}`;
+}
+
+export function isCatalogCandidate(candidate: SkillCandidate) {
+  return candidate.id.startsWith(CatalogCandidatePrefix);
+}
+
+export function unresolvedConflicts(candidates: SkillCandidate[], skills: CatalogSkill[]) {
+  return skillConflicts(candidates, skills).filter((group) => group.candidates.length > 1);
+}
+
+export function toCatalogSkill(candidate: SkillCandidate, rejected: string[]): CatalogSkill {
+  return {
+    name: candidate.name,
+    description: candidate.description,
+    source: candidate.source,
+    fingerprint: candidate.fingerprint,
+    rejected,
+    warnings: candidate.warnings,
+  };
+}
+
+export function isSkillWorkRunning(phase: SkillsView['phase']) {
+  return phase === SkillPhase.scanning || phase === SkillPhase.importing || phase === SkillPhase.syncing;
 }
