@@ -30,6 +30,10 @@ import { ProviderRunRepository } from '@/modules/providers/repositories/provider
 import { ProviderUpdateRepository } from '@/modules/providers/repositories/provider-update.repository';
 import { ProviderUpdatesService } from '@/modules/providers/services/provider-updates.service';
 import { ProvidersService } from '@/modules/providers/services/providers.service';
+import { registerSkillsController } from '@/modules/skills/controllers/skills.controller';
+import type { SkillLibrary } from '@/modules/skills/gateways/skill-library';
+import { SkillStateRepository } from '@/modules/skills/repositories/skill-state.repository';
+import { SkillsService } from '@/modules/skills/services/skills.service';
 import { registerSystemController } from '@/modules/system/controllers/system.controller';
 import type { Clock } from '@/modules/system/gateways/clock';
 import type { FileSystem } from '@/modules/system/gateways/file-system';
@@ -57,6 +61,7 @@ import { RpcRouter } from '@/shared/rpc/rpc-router';
 
 export type ServerGateways = {
   fileSystem: FileSystem;
+  skillLibrary: SkillLibrary;
   processes: ProcessRunner;
   shell: ShellEnvironment;
   clock: Clock;
@@ -84,6 +89,7 @@ export type ServerOptions = {
 export function createServer(gateways: ServerGateways, options: ServerOptions) {
   const {
     fileSystem,
+    skillLibrary,
     processes,
     shell,
     clock,
@@ -103,7 +109,8 @@ export function createServer(gateways: ServerGateways, options: ServerOptions) {
   const providers = new ProvidersService(clis, processes, shell, paths, callerEnv);
   const config = new ConfigRepository(fileSystem, paths);
   const accountRepository = new AccountRepository(fileSystem, paths);
-  const seats = new SeatsService(fileSystem, accountRepository, providers, paths);
+  const skills = new SkillsService(new SkillStateRepository(fileSystem, paths), skillLibrary);
+  const seats = new SeatsService(fileSystem, accountRepository, providers, paths, skills);
   const threadRepository = new ThreadRepository(fileSystem, paths);
   const accounts = new AccountsService(
     fileSystem,
@@ -192,6 +199,7 @@ export function createServer(gateways: ServerGateways, options: ServerOptions) {
     clock,
     isDangerouslySkippingPermissions
   );
+  registerSkillsController(router, skills);
   registerSystemController(router, host);
   registerAccountsController(router, accounts, seats, threads, hooks);
   registerUsageController(router, limits, tokens, prices, usageView);

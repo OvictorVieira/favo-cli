@@ -44,6 +44,10 @@ export const CommandKind = {
   hooksStatus: 'hooksStatus',
   hooksInstall: 'hooksInstall',
   hooksUninstall: 'hooksUninstall',
+  skillsList: 'skillsList',
+  skillsImport: 'skillsImport',
+  skillsSkip: 'skillsSkip',
+  skillsUse: 'skillsUse',
   machineList: 'machineList',
   machineAdd: 'machineAdd',
   machineRemove: 'machineRemove',
@@ -135,6 +139,8 @@ export function parseCommand(rawArgv: string[]): Command {
       return { ...base, kind: CommandKind.threads, ...seatOf(second, third, 'favo threads <provider> <account>') };
     case 'hooks':
       return parseHooks(base, second);
+    case 'skills':
+      return parseSkills(base, second, third, fourth);
     case 'path':
       return { ...base, kind: CommandKind.path, ...seatOf(second, third, 'favo path <provider> <account>') };
     case 'app':
@@ -221,6 +227,24 @@ function parseHooks(base: Omit<Command, 'kind'>, action?: string): Command {
       return { ...base, kind: CommandKind.hooksUninstall };
     default:
       throw new DomainError(DomainErrorCode.invalidParams, `Unknown hooks command "${action}".`);
+  }
+}
+
+function parseSkills(base: Omit<Command, 'kind'>, action?: string, name?: string, version?: string): Command {
+  switch (action) {
+    case undefined:
+    case 'list':
+      return { ...base, kind: CommandKind.skillsList };
+    case 'import':
+      return { ...base, kind: CommandKind.skillsImport };
+    case 'skip':
+      return { ...base, kind: CommandKind.skillsSkip };
+    case 'use': {
+      const usage = 'favo skills use <skill> <version>';
+      return { ...base, kind: CommandKind.skillsUse, name: required(name, usage), target: required(version, usage) };
+    }
+    default:
+      throw new DomainError(DomainErrorCode.invalidParams, `Unknown skills command "${action}".`);
   }
 }
 

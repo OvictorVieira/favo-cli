@@ -18,6 +18,7 @@ import { CodexProviderCli } from '@/modules/providers/gateways/codex.provider-cl
 import { CopilotProviderCli } from '@/modules/providers/gateways/copilot.provider-cli';
 import { CursorProviderCli } from '@/modules/providers/gateways/cursor.provider-cli';
 import { OpencodeProviderCli } from '@/modules/providers/gateways/opencode.provider-cli';
+import { NodeSkillLibrary } from '@/modules/skills/gateways/node.skill-library';
 import { BunProcessRunner } from '@/modules/system/gateways/bun.process-runner';
 import { InheritedShellEnvironment } from '@/modules/system/gateways/inherited.shell-environment';
 import { LoginShellEnvironment } from '@/modules/system/gateways/login.shell-environment';
@@ -55,6 +56,7 @@ export function createProductionServer(
   return createServer(
     {
       fileSystem,
+      skillLibrary: new NodeSkillLibrary(home, paths.root, paths.configHome),
       processes,
       shell,
       clock: new SystemClock(),

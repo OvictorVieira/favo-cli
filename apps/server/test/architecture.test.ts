@@ -7,6 +7,7 @@ const ModuleLevels: Record<string, number> = {
   system: 1,
   providers: 2,
   themes: 2,
+  skills: 2,
   directories: 2,
   herdr: 2,
   accounts: 3,

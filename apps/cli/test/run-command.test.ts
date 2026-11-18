@@ -581,3 +581,60 @@ describe('favo hooks', () => {
     expect(lines.join('\n')).toContain('disableAllHooks is on in settings.json, so hooks never run.');
   });
 });
+
+describe('skills', () => {
+  const candidate = (id: string, name: string, fingerprint = id) => ({
+    id,
+    name,
+    fingerprint,
+    source: `/skills/${id}`,
+    description: 'Systematic diagnosis',
+    preview: id,
+    warnings: [],
+  });
+
+  it('imports nothing until the user agrees', async () => {
+    const bee = harness();
+    bee.skillLibrary.candidates = [candidate('debug', 'debug-root-cause')];
+    expect(await bee.run('skills', 'import')).toBe(1);
+    expect(bee.questions).toHaveLength(1);
+    expect(bee.skillLibrary.adopted).toEqual([]);
+    expect(bee.skillLibrary.published).toEqual([]);
+  });
+
+  it('imports and publishes after the user agrees', async () => {
+    const bee = harness();
+    bee.context.ask = async () => true;
+    bee.skillLibrary.candidates = [candidate('debug', 'debug-root-cause')];
+    expect(await bee.run('skills', 'import')).toBe(0);
+    expect(bee.skillLibrary.adopted).toEqual(['debug']);
+    expect(bee.lines.join('\n')).toContain('debug-root-cause');
+  });
+
+  it('stops on a conflict and lists the versions to choose from', async () => {
+    const bee = harness();
+    bee.context.ask = async () => true;
+    bee.skillLibrary.candidates = [candidate('read-only', 'review-pr'), candidate('edits', 'review-pr')];
+    expect(await bee.run('skills', 'import')).toBe(1);
+    const output = bee.lines.join('\n');
+    expect(output).toContain('favo skills use review-pr read-only');
+    expect(output).toContain('favo skills use review-pr edits');
+    expect(bee.skillLibrary.published).toEqual([]);
+  });
+
+  it('publishes once a version is chosen', async () => {
+    const bee = harness();
+    bee.context.ask = async () => true;
+    bee.skillLibrary.candidates = [candidate('read-only', 'review-pr'), candidate('edits', 'review-pr')];
+    await bee.run('skills', 'import');
+    expect(await bee.run('skills', 'use', 'review-pr', 'edits')).toBe(0);
+    expect(bee.skillLibrary.published.map(({ name }) => name)).toEqual(['review-pr']);
+  });
+
+  it('remembers a refusal and lists the catalog', async () => {
+    const bee = harness();
+    expect(await bee.run('skills', 'skip')).toBe(0);
+    await bee.run('skills');
+    expect(bee.lines.join('\n')).toContain('skipped');
+  });
+});

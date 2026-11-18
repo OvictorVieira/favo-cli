@@ -18,6 +18,10 @@ import { getSeatStatus } from '@favo/contracts/rpc/seats/get-seat-status';
 import { inspectSeat } from '@favo/contracts/rpc/seats/inspect-seat';
 import { provisionSeat } from '@favo/contracts/rpc/seats/provision-seat';
 import { repairSeats } from '@favo/contracts/rpc/seats/repair-seats';
+import { getSkills } from '@favo/contracts/rpc/skills/get-skills';
+import { importSkills } from '@favo/contracts/rpc/skills/import-skills';
+import { resolveSkill } from '@favo/contracts/rpc/skills/resolve-skill';
+import { skipSkills } from '@favo/contracts/rpc/skills/skip-skills';
 import { planTerminal } from '@favo/contracts/rpc/terminal/plan-terminal';
 import { listThemes } from '@favo/contracts/rpc/themes/list-themes';
 import { selectTheme } from '@favo/contracts/rpc/themes/select-theme';
@@ -30,6 +34,7 @@ import { HookState } from '@favo/domain/hooks/provider-hook';
 import { isOlderFavoError, type Machine, MachineState } from '@favo/domain/machines/machine';
 import { ProviderOrder, Providers } from '@favo/domain/providers/provider';
 import { DomainError } from '@favo/domain/shared/domain-error';
+import { SkillDecision, SkillPhase, type SkillsView } from '@favo/domain/skills/skill';
 import { TerminalAction, type TerminalPlan } from '@favo/domain/terminal/terminal-plan';
 import { ThemeSource } from '@favo/domain/themes/theme';
 import { shortThreadId, threadAgeOf } from '@favo/domain/threads/thread';
@@ -107,6 +112,20 @@ export async function runCommand(parsed: Command, context: CommandContext) {
       return onCurrentFavo(context, machineId, async () => {
         printHooks(context, await client.call(uninstallHooks, {}, options), isJson);
       });
+    case CommandKind.skillsList:
+      printSkills(context, await client.call(getSkills, {}), isJson);
+      return 0;
+    case CommandKind.skillsSkip:
+      printSkills(context, await client.call(skipSkills, {}), isJson);
+      return 0;
+    case CommandKind.skillsImport:
+      return importSkillCatalog(context, isJson);
+    case CommandKind.skillsUse:
+      return printSkills(
+        context,
+        await client.call(resolveSkill, { name: command.name!, candidateId: command.target! }),
+        isJson
+      );
     case CommandKind.list:
       await printFleet(context, isJson);
       return 0;
@@ -306,6 +325,52 @@ function threadLine({ paint }: CommandContext, thread: ThreadView, position: num
     thread.isGuess ? 'a guess' : undefined,
   ];
   return `${String(position).padStart(2)}  ${age} ${paint.accent(shortThreadId(thread.id))}  ${facts.filter(Boolean).join(' · ')}`;
+}
+
+const SkillPollMilliseconds = 100;
+
+async function importSkillCatalog(context: CommandContext, isJson: boolean) {
+  const agreed = await context.ask(
+    'Import your agent skills into the shared Favo catalog and link them for every agent? Existing copies are backed up first.'
+  );
+  if (!agreed) {
+    context.print('Nothing imported.');
+    return 1;
+  }
+  await context.client.call(importSkills, {});
+  let view = await context.client.call(getSkills, {});
+  while (
+    view.phase === SkillPhase.scanning ||
+    view.phase === SkillPhase.importing ||
+    view.phase === SkillPhase.syncing
+  ) {
+    await Bun.sleep(SkillPollMilliseconds);
+    view = await context.client.call(getSkills, {});
+  }
+  return printSkills(context, view, isJson);
+}
+
+function printSkills(context: CommandContext, view: SkillsView, isJson: boolean) {
+  const { print, paint } = context;
+  if (isJson) {
+    print(JSON.stringify(view, undefined, 2));
+    return view.phase === SkillPhase.conflicts || view.phase === SkillPhase.failed ? 1 : 0;
+  }
+  if (view.decision === SkillDecision.pending) print('Skills are not shared yet. Run: favo skills import');
+  if (view.decision === SkillDecision.skipped)
+    print('Skills sharing was skipped. Run: favo skills import to change that.');
+  for (const skill of view.skills) {
+    print(`${paint.accent('⬢')} ${skill.name}  ${paint.dim(skill.description)}`);
+    for (const warning of skill.warnings) print(paint.dim(`    ${warning}`));
+  }
+  for (const conflict of view.conflicts) {
+    print(`${conflict.name} has ${conflict.candidates.length} different versions. Choose one:`);
+    for (const candidate of conflict.candidates) {
+      print(`  favo skills use ${conflict.name} ${candidate.id}  ${paint.dim(candidate.source)}`);
+    }
+  }
+  for (const problem of view.problems) print(`! ${problem}`);
+  return view.phase === SkillPhase.conflicts || view.phase === SkillPhase.failed ? 1 : 0;
 }
 
 function printHooks(context: CommandContext, hooks: HookView[], isJson: boolean) {

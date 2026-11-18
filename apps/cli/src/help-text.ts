@@ -45,6 +45,14 @@ Threads
   favo hooks install                 add favo's hook to your provider config
   favo hooks uninstall               take it out again
 
+Skills
+  favo skills                        the shared skill catalog, and any conflict
+  favo skills import                 after you agree, copy your agent skills into
+                                     one catalog and link it for every agent;
+                                     replaced copies are backed up first
+  favo skills use <skill> <version>  pick one version when the same name differs
+  favo skills skip                   keep skills separate for each agent
+
 Machines
   favo machine list                  machines this one can reach
   favo machine discover              find machines on ssh and Tailscale

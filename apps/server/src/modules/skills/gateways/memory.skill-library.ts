@@ -1,0 +1,20 @@
+import type { CatalogSkill, SkillCandidate } from '@favo/domain/skills/skill';
+import { SkillLibrary } from './skill-library';
+
+export class MemorySkillLibrary extends SkillLibrary {
+  candidates: SkillCandidate[] = [];
+  problems: string[] = [];
+  adopted: string[] = [];
+  published: CatalogSkill[] = [];
+  async discover(progress: (message: string) => void) {
+    progress('Scanning local skills');
+    return { candidates: this.candidates, problems: this.problems };
+  }
+  async adopt(candidate: SkillCandidate) {
+    this.adopted.push(candidate.id);
+  }
+  async publish(skills: CatalogSkill[]) {
+    this.published = skills;
+    return [];
+  }
+}

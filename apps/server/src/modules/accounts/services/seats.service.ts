@@ -13,6 +13,7 @@ import {
 } from '@favo/domain/sharing/shared-item';
 import type { AccountRepository } from '@/modules/accounts/repositories/account.repository';
 import type { ProvidersService } from '@/modules/providers/services/providers.service';
+import type { SkillsService } from '@/modules/skills/services/skills.service';
 import type { FileSystem } from '@/modules/system/gateways/file-system';
 import type { FavoPaths } from '@/shared/config/favo-paths';
 
@@ -21,7 +22,8 @@ export class SeatsService {
     private readonly fileSystem: FileSystem,
     private readonly accounts: AccountRepository,
     private readonly providers: ProvidersService,
-    private readonly paths: FavoPaths
+    private readonly paths: FavoPaths,
+    private readonly skills?: SkillsService
   ) {}
 
   async status(account: string, provider: ProviderId): Promise<SeatStatus> {
@@ -84,6 +86,7 @@ export class SeatsService {
 
   async reconcile(account: string, provider: ProviderId) {
     await this.assertAccount(account);
+    await this.skills?.ensureProvider(provider);
     const linked: string[] = [];
     const problems: { name: string; state: SharedItemState }[] = [];
     if (isPersonalAccount(account)) return { account, provider, linked, problems };

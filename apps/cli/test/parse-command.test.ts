@@ -65,6 +65,28 @@ describe('favo hooks', () => {
   });
 });
 
+describe('favo skills', () => {
+  it('lists the catalog by default', () => {
+    expect(parseCommand(['skills']).kind).toBe('skillsList');
+    expect(parseCommand(['skills', 'list', '--json'])).toMatchObject({ kind: 'skillsList', isJson: true });
+  });
+  it('imports, skips and chooses a version', () => {
+    expect(parseCommand(['skills', 'import']).kind).toBe('skillsImport');
+    expect(parseCommand(['skills', 'skip']).kind).toBe('skillsSkip');
+    expect(parseCommand(['skills', 'use', 'review-pr', 'abc'])).toMatchObject({
+      kind: 'skillsUse',
+      name: 'review-pr',
+      target: 'abc',
+    });
+  });
+  it('asks for both the skill and the version', () => {
+    expect(() => parseCommand(['skills', 'use', 'review-pr'])).toThrow('Usage: favo skills use <skill> <version>');
+  });
+  it('refuses anything else', () => {
+    expect(() => parseCommand(['skills', 'sync'])).toThrow('Unknown skills command "sync".');
+  });
+});
+
 describe('parseCommand', () => {
   it('opens the TUI with no arguments', () => {
     expect(parseCommand([]).kind).toBe(CommandKind.tui);

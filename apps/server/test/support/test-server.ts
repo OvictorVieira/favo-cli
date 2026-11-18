@@ -9,6 +9,7 @@ import { ScriptedSsh } from '@/modules/machines/gateways/scripted.ssh';
 import { StaticTailscale } from '@/modules/machines/gateways/static.tailscale';
 import type { TailscalePeer } from '@/modules/machines/gateways/tailscale';
 import { ScriptedProviderCli } from '@/modules/providers/gateways/scripted.provider-cli';
+import { MemorySkillLibrary } from '@/modules/skills/gateways/memory.skill-library';
 import { FixedClock } from '@/modules/system/gateways/fixed.clock';
 import { InheritedShellEnvironment } from '@/modules/system/gateways/inherited.shell-environment';
 import { MemoryFileSystem } from '@/modules/system/gateways/memory.file-system';
@@ -49,6 +50,7 @@ class FixedShellEnvironment extends InheritedShellEnvironment {
 
 export function createTestServer(options: TestServerOptions = {}) {
   const fileSystem = new MemoryFileSystem();
+  const skillLibrary = new MemorySkillLibrary();
   const processes = new ScriptedProcessRunner();
   for (const command of options.installed ?? ['claude', 'codex', 'agy', 'opencode']) processes.install(command);
   const clis = {
@@ -78,6 +80,7 @@ export function createTestServer(options: TestServerOptions = {}) {
   const server = createServer(
     {
       fileSystem,
+      skillLibrary,
       processes,
       shell: new FixedShellEnvironment('/usr/bin:/bin', options.shellVariables ?? {}),
       clock,
@@ -110,6 +113,7 @@ export function createTestServer(options: TestServerOptions = {}) {
   return {
     ...server,
     client: createRpcClient(server.router),
+    skillLibrary,
     fileSystem,
     processes,
     clis,
