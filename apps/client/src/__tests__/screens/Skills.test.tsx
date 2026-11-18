@@ -143,6 +143,8 @@ describe('the skills screen', () => {
     await view.waitForFrame((frame) => frame.includes('let AI settle'));
     await view.press('i');
     await view.waitForFrame((frame) => frame.includes('will be sent to your signed-in AI'));
+    expect(view.captureCharFrame()).toContain('enter send to my AI');
+    expect(view.captureCharFrame()).toContain('esc cancel');
     expect(mockDb.skills.chosen).toEqual([]);
     await view.pressEscape();
     expect(view.captureCharFrame()).not.toContain('will be sent to your signed-in AI');

@@ -39,12 +39,15 @@ export function SkillsScreen() {
   const listHeight = Math.max(height - DialogChrome, MinimumListHeight);
   const home = process.env.HOME;
 
+  function confirmJudge() {
+    setIsConfirmingJudge(false);
+    void error.handle(autoResolveSkillVersions)();
+  }
+
   useKeyboard((key) => {
     if (isConfirmingJudge) {
-      if (key.name === 'return') {
-        setIsConfirmingJudge(false);
-        void error.handle(autoResolveSkillVersions)();
-      } else if (key.name === 'escape') setIsConfirmingJudge(false);
+      if (key.name === 'return') confirmJudge();
+      else if (key.name === 'escape') setIsConfirmingJudge(false);
       return;
     }
     if (key.name === 'escape') closeSkills();
@@ -140,20 +143,29 @@ export function SkillsScreen() {
           </scrollbox>
         </>
       )}
-      {view.problems.slice(0, 3).map((problem) => (
-        <text key={problem} fg={colors.danger} wrapMode="none" truncate>
-          {problem}
-        </text>
-      ))}
+      {!isConfirmingJudge &&
+        view.problems.slice(0, 3).map((problem) => (
+          <text key={problem} fg={colors.danger} wrapMode="none" truncate>
+            {problem}
+          </text>
+        ))}
       <box flexDirection="row" marginTop={1}>
-        {canStart && <KeyHint keys="enter" label="share" onPress={error.handle(startSkillImport)} />}
-        {isFirstOffer && !isRunning && <KeyHint keys="s" label="never" onPress={error.handle(skipSkillSharing)} />}
-        {canScanAgain && <KeyHint keys="r" label="scan again" onPress={error.handle(startSkillImport)} />}
+        {isConfirmingJudge && <KeyHint keys="enter" label="send to my AI" onPress={confirmJudge} />}
+        {isConfirmingJudge && <KeyHint keys="esc" label="cancel" onPress={() => setIsConfirmingJudge(false)} />}
+        {!isConfirmingJudge && canStart && (
+          <KeyHint keys="enter" label="share" onPress={error.handle(startSkillImport)} />
+        )}
+        {!isConfirmingJudge && isFirstOffer && !isRunning && (
+          <KeyHint keys="s" label="never" onPress={error.handle(skipSkillSharing)} />
+        )}
+        {!isConfirmingJudge && canScanAgain && (
+          <KeyHint keys="r" label="scan again" onPress={error.handle(startSkillImport)} />
+        )}
         {showsChoices && <KeyHint keys="↑↓" label="move" />}
         {showsChoices && <KeyHint keys="enter" label="keep this one" onPress={error.handle(chooseSkillVersion)} />}
         {showsChoices && <KeyHint keys="i" label="let AI settle" onPress={() => setIsConfirmingJudge(true)} />}
         {showsChoices && <KeyHint keys="a" label="newest of each" onPress={error.handle(keepNewestSkillVersions)} />}
-        <KeyHint keys="esc" label={isFirstOffer ? 'later' : 'close'} onPress={closeSkills} />
+        {!isConfirmingJudge && <KeyHint keys="esc" label={isFirstOffer ? 'later' : 'close'} onPress={closeSkills} />}
       </box>
     </Dialog>
   );
