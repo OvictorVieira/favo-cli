@@ -1,3 +1,4 @@
+import type { IChatRepository } from '@/modules/chat/app/repositories/IChatRepository';
 import type { IFleetRepository } from '@/modules/comb/app/repositories/IFleetRepository';
 import type { IDirectoryRepository } from '@/modules/directories/app/repositories/IDirectoryRepository';
 import type { IMachineRepository } from '@/modules/machines/app/repositories/IMachineRepository';
@@ -12,6 +13,7 @@ import type { ITerminalGateway } from '@/shared/app/gateways/ITerminalGateway';
 
 export interface InjectableItems {
   IFleetRepository: IFleetRepository;
+  IChatRepository: IChatRepository;
   IMachineRepository: IMachineRepository;
   ITerminalRepository: ITerminalRepository;
   IDesktopRepository: IDesktopRepository;

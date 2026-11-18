@@ -10,6 +10,117 @@ describe('SessionService', () => {
     await app.state.openSelectedSeat();
     expect(mockDb.terminalRuns).toEqual([{ command: 'claude', args: ['launch', 'personal'], env: {}, unsetEnv: [] }]);
   });
+  test('offers a same-account provider after a limit and carries the transcript into its prompt', async () => {
+    const app = await getApp();
+    mockDb.terminalRateLimitDetected = true;
+    mockDb.threads['seat:local/personal/claude']![0]!.transcript = '/local/claude/session.jsonl';
+
+    await app.state.launchSelectedSeat();
+
+    expect(app.state.pendingHandoff?.source.provider).toBe('claude');
+    expect(app.state.pendingHandoff?.transcript).toBe('/local/claude/session.jsonl');
+    const codex = app.state.selectedAccount?.visibleSeats.find((seat) => seat.provider === 'codex');
+    expect(codex?.isSignedIn).toBe(true);
+    await app.state.continueHandoff(codex!);
+
+    expect(mockDb.terminalRuns[1]?.args.at(-1)).toContain('/local/claude/session.jsonl');
+    expect(app.state.pendingHandoff?.source.provider).toBe('codex');
+  });
+  test('keeps no folder for a handoff when the launch had none, so another machine is not sent this one', async () => {
+    const app = await getApp();
+    mockDb.terminalRateLimitDetected = true;
+    app.state.selectRow('seat:devbox/personal/claude');
+
+    await app.state.launchSelectedSeat();
+
+    expect(app.state.pendingHandoff?.directory).toBeUndefined();
+    const codex = app.state.selectedAccount?.visibleSeats.find((seat) => seat.provider === 'codex');
+    await app.state.continueHandoff(codex!);
+    expect(mockDb.terminalRuns.at(-1)?.cwd).toBeUndefined();
+  });
+  test('hands the folder of the saved thread to the next provider, because that is where the work was', async () => {
+    const app = await getApp();
+    mockDb.terminalRateLimitDetected = true;
+    const thread = mockDb.threads['seat:local/personal/claude']![0]!;
+    await app.state.launchSelectedSeat();
+    expect(app.state.pendingHandoff?.directory).toBe(thread.directory);
+  });
+  test('stops the handoff when asked, and starts nothing', async () => {
+    const app = await getApp();
+    mockDb.terminalRateLimitDetected = true;
+    await app.state.launchSelectedSeat();
+    app.state.closeHandoff();
+    expect(app.state.pendingHandoff).toBeUndefined();
+    await app.state.continueHandoff(app.state.selectedAccount!.visibleSeats[1]!);
+    expect(mockDb.terminalRuns).toHaveLength(1);
+  });
+  test('offers no handoff when the launch did not hit a limit', async () => {
+    const app = await getApp();
+    await app.state.launchSelectedSeat();
+    expect(app.state.pendingHandoff).toBeUndefined();
+  });
+  test('gives the handoff back when the next provider cannot start, so it can be tried again', async () => {
+    const app = await getApp();
+    mockDb.terminalRateLimitDetected = true;
+    await app.state.launchSelectedSeat();
+    const handoff = app.state.pendingHandoff;
+    const codex = app.state.selectedAccount?.visibleSeats.find((seat) => seat.provider === 'codex');
+    const gateway = container.get('ITerminalGateway');
+    gateway.run = () => Promise.reject(new Error('could not start'));
+    await expect(app.state.continueHandoff(codex!)).rejects.toThrow('could not start');
+    expect(app.state.pendingHandoff).toEqual(handoff);
+  });
+  test('starts the next provider with its own way of taking a first prompt', async () => {
+    const app = await getApp();
+    mockDb.terminalRateLimitDetected = true;
+    await app.state.launchSelectedSeat();
+    mockDb.terminalRateLimitDetected = false;
+    const codex = app.state.selectedAccount?.visibleSeats.find((seat) => seat.provider === 'codex');
+    await app.state.continueHandoff(codex!);
+    expect(mockDb.terminalRuns.at(-1)?.args.at(-1)).toContain(
+      'Continue work after Claude Code reached its usage limit.'
+    );
+  });
+  test.each([
+    ['copilot', ['--interactive']],
+    ['cursor', []],
+  ] as const)('starts %s with its own way of taking a first prompt', async (provider, flags) => {
+    const app = await getApp();
+    mockDb.accounts.local = mockDb.accounts.local!.map((account) => ({
+      ...account,
+      seats: account.seats.map((seat) => (seat.provider === provider ? { ...seat, isInstalled: true } : seat)),
+    }));
+    mockDb.seatStatuses[`seat:local/personal/${provider}`] = {
+      login: 'signedIn',
+      identity: 'bee@hive.dev',
+      problems: 0,
+    };
+    await app.state.refreshMachine('local');
+    mockDb.terminalRateLimitDetected = true;
+    await app.state.launchSelectedSeat();
+    mockDb.terminalRateLimitDetected = false;
+    const next = app.state.selectedAccount?.visibleSeats.find((seat) => seat.provider === provider);
+    expect(next?.isSignedIn).toBe(true);
+
+    await app.state.continueHandoff(next!);
+
+    const { args } = mockDb.terminalRuns.at(-1)!;
+    expect(args.slice(2, -1)).toEqual([...flags]);
+    expect(args.at(-1)).toContain('Continue work after Claude Code reached its usage limit.');
+  });
+  test('hands over the thread that was resumed, not whichever the list shows first', async () => {
+    const app = await getApp();
+    const [newest, older] = mockDb.threads['seat:local/personal/claude']!;
+    newest!.transcript = '/local/claude/newest.jsonl';
+    older!.transcript = '/local/claude/older.jsonl';
+    older!.directory = '/Users/bee/other';
+    mockDb.terminalRateLimitDetected = true;
+
+    await app.state.resumeSeatThread(app.state.selectedSeat!, older!);
+
+    expect(app.state.pendingHandoff?.transcript).toBe('/local/claude/older.jsonl');
+    expect(app.state.pendingHandoff?.directory).toBe('/Users/bee/other');
+  });
   test('launches with no folder on a machine named like an inherited property', async () => {
     const id: string = 'constructor';
     const app = await getApp();

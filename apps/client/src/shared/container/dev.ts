@@ -1,4 +1,5 @@
 import { mockDb } from '@/__tests__/db';
+import { TestChatRepository } from '@/modules/chat/app/repositories/TestChatRepository';
 import { TestFleetRepository } from '@/modules/comb/app/repositories/TestFleetRepository';
 import { TestDirectoryRepository } from '@/modules/directories/app/repositories/TestDirectoryRepository';
 import { TestMachineRepository } from '@/modules/machines/app/repositories/TestMachineRepository';
@@ -23,6 +24,7 @@ export function bootstrapDevContainer() {
   container.register('IUsageRepository', new TestUsageRepository());
   container.register('IProviderCliRepository', new TestProviderCliRepository());
   container.register('IDirectoryRepository', new TestDirectoryRepository());
+  container.register('IChatRepository', new TestChatRepository());
   container.register('IClipboardGateway', new TestClipboardGateway());
   container.register('ITerminalGateway', new TestTerminalGateway());
 }

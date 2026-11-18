@@ -76,6 +76,15 @@ describe('mirrorEntries', () => {
   });
 });
 
+describe('mirrorEntries with entries the provider keeps out', () => {
+  it('leaves the macOS Library out, so a seat cannot reach the login keychain', () => {
+    expect(mirrorEntries(['Library', '.gitconfig', '.ssh'], [], ['Library'])).toEqual(['.gitconfig', '.ssh']);
+  });
+  it('mirrors every entry when the provider keeps none out', () => {
+    expect(mirrorEntries(['Library', '.gitconfig'], [])).toEqual(['.gitconfig', 'Library']);
+  });
+});
+
 describe('mirrorEntries on a real home', () => {
   it('never touches the Windows registry files that live in a home folder', () => {
     const entries = [

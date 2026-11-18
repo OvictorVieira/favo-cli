@@ -189,8 +189,18 @@ describe('commands', () => {
     const output = mac.lines.join('\n');
     expect(output).toContain('macbook this machine · online');
     expect(output).toContain('devbox bee@devbox · online');
-    expect(output).toContain('⬢ claude    mac@bee.dev');
-    expect(output).toContain('⬢ claude    devbox@bee.dev · max');
+    expect(output).toContain('⬢ claude       mac@bee.dev');
+    expect(output).toContain('⬢ claude       devbox@bee.dev · max');
+  });
+  it('lines up every provider, including the one with the longest command', async () => {
+    const mac = harness();
+    await seedClaudeBase(mac.fileSystem);
+    mac.clis.claude.login = { login: LoginState.signedIn, identity: 'mac@bee.dev' };
+    await mac.run('list');
+    const seatLines = mac.lines.filter((line) => /^\s{4}[⬢⬡] /.test(line));
+    expect(seatLines.some((line) => line.includes('cursor-agent'))).toBe(true);
+    const columns = seatLines.map((line) => /^\s{4}[⬢⬡] (\S+\s+)/.exec(line)?.[1]?.length);
+    expect(new Set(columns).size).toBe(1);
   });
   it('says which directory a launch runs in on each machine', async () => {
     const mac = harness(createTestServer({ directory: '/Users/bee/code/app' }));

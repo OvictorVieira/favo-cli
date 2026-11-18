@@ -1,5 +1,6 @@
 import { createRpcClient } from '@favo/contracts/rpc/client';
 import { ProviderId } from '@favo/domain/providers/provider';
+import { ScriptedChatRunner } from '@/modules/chat/gateways/scripted.chat-runner';
 import { ScriptedDesktopApps } from '@/modules/desktop/gateways/scripted.desktop-apps';
 import { ScriptedHerdr } from '@/modules/herdr/gateways/scripted.herdr';
 import { LoopbackRemoteBackends } from '@/modules/machines/gateways/loopback.remote-backends';
@@ -54,6 +55,13 @@ export function createTestServer(options: TestServerOptions = {}) {
     [ProviderId.codex]: new ScriptedProviderCli(ProviderId.codex),
     [ProviderId.antigravity]: new ScriptedProviderCli(ProviderId.antigravity, false),
     [ProviderId.opencode]: new ScriptedProviderCli(ProviderId.opencode),
+    [ProviderId.cursor]: new ScriptedProviderCli(ProviderId.cursor),
+    [ProviderId.copilot]: new ScriptedProviderCli(ProviderId.copilot),
+  };
+  const chatRunners = {
+    [ProviderId.claude]: new ScriptedChatRunner(ProviderId.claude),
+    [ProviderId.codex]: new ScriptedChatRunner(ProviderId.codex),
+    [ProviderId.cursor]: new ScriptedChatRunner(ProviderId.cursor),
   };
   const ssh = new ScriptedSsh();
   const remotes = new LoopbackRemoteBackends();
@@ -71,6 +79,7 @@ export function createTestServer(options: TestServerOptions = {}) {
       shell: new FixedShellEnvironment('/usr/bin:/bin', options.shellVariables ?? {}),
       clock,
       clis,
+      chatRunners,
       ssh,
       tailscale: new StaticTailscale(options.peers),
       remotes,
@@ -100,6 +109,7 @@ export function createTestServer(options: TestServerOptions = {}) {
     fileSystem,
     processes,
     clis,
+    chatRunners,
     ssh,
     remotes,
     releaseAssets,

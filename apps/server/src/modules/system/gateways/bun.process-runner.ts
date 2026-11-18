@@ -44,7 +44,7 @@ export class BunProcessRunner extends ProcessRunner {
     const child = Bun.spawn(spawnCommandOf(request.command, request.args), {
       cwd: request.cwd,
       env: this.environmentOf(request),
-      stdin: 'pipe',
+      stdin: request.hasNoInput ? 'ignore' : 'pipe',
       stdout: 'pipe',
       stderr: 'pipe',
     });
@@ -62,7 +62,7 @@ export class BunProcessRunner extends ProcessRunner {
     const stderr = readTail(child.stderr, MaximumStderrBytes);
     return {
       write(line) {
-        void writeLine(child.stdin, line).catch(failWith);
+        if (child.stdin) void writeLine(child.stdin, line).catch(failWith);
       },
       onLine(listener) {
         listeners.push(listener);

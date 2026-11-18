@@ -5,6 +5,7 @@ import type { StartProviderUpdatesParams } from '@favo/contracts/rpc/updates/sta
 import type {
   AccountView,
   AppLoginStatus,
+  ChatView,
   DesktopAppView,
   HookView,
   ProviderVersionView,
@@ -15,7 +16,7 @@ import type {
   ThreadView,
 } from '@favo/contracts/rpc/views';
 import type { Machine } from '@favo/domain/machines/machine';
-import { ProviderId, ProviderOrder, Providers } from '@favo/domain/providers/provider';
+import { HookedProviders, hookedSpecOf, ProviderId, ProviderOrder, Providers } from '@favo/domain/providers/provider';
 import type { DomainError } from '@favo/domain/shared/domain-error';
 import type { TerminalPlan } from '@favo/domain/terminal/terminal-plan';
 import { BuiltInThemes } from '@favo/domain/themes/built-in-themes';
@@ -41,12 +42,19 @@ function seatOf(home: string, account: string, provider: ProviderId, overrides: 
   };
 }
 
+const NotInstalledByDefault: ProviderId[] = [ProviderId.cursor, ProviderId.copilot];
+
 export function accountOf(
   home: string,
   name: string,
   overrides: Partial<Record<ProviderId, Partial<SeatView>>> = {}
 ): AccountView {
-  const seats = ProviderOrder.map((provider) => seatOf(home, name, provider, overrides[provider]));
+  const seats = ProviderOrder.map((provider) =>
+    seatOf(home, name, provider, {
+      ...(NotInstalledByDefault.includes(provider) && { isInstalled: false }),
+      ...overrides[provider],
+    })
+  );
   return { name, displayName: name, isPersonal: name === 'personal', seats };
 }
 
@@ -255,7 +263,7 @@ function seedProviderVersions(): Record<string, ProviderVersionView[]> {
 }
 
 function hookOf(provider: ProviderId, state: HookView['state'], overrides: Partial<HookView> = {}): HookView {
-  const { label, hook } = Providers[provider];
+  const { label, hook } = hookedSpecOf(provider);
   return {
     provider,
     label,
@@ -276,7 +284,7 @@ function seedHooks(): Record<string, HookView[]> {
       hookOf(ProviderId.antigravity, 'absent', { isProviderInstalled: false }),
       hookOf(ProviderId.opencode, 'current'),
     ],
-    devbox: ProviderOrder.map((provider) => hookOf(provider, 'absent')),
+    devbox: HookedProviders.map((provider) => hookOf(provider, 'absent')),
   };
 }
 
@@ -405,6 +413,11 @@ export const mockDb = {
   clipboard: [] as string[],
   terminalRuns: [] as TerminalPlan[],
   terminalExitCode: 0,
+  terminalRateLimitDetected: false,
+  chats: {} as Record<string, ChatView>,
+  chatBusyReads: 0,
+  chatReads: [] as string[],
+  chatEnded: [] as string[],
   provisioned: [] as string[],
   repaired: [] as string[],
   repairedLinks: 0,
@@ -454,6 +467,11 @@ export const mockDb = {
     this.clipboard = [];
     this.terminalRuns = [];
     this.terminalExitCode = 0;
+    this.terminalRateLimitDetected = false;
+    this.chats = {};
+    this.chatBusyReads = 0;
+    this.chatReads = [];
+    this.chatEnded = [];
     this.provisioned = [];
     this.repaired = [];
     this.repairedLinks = 0;

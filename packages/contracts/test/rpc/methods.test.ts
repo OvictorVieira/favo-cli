@@ -2,6 +2,12 @@ import { describe, expect, it } from 'bun:test';
 import { BuiltInThemes } from '@favo/domain/themes/built-in-themes';
 import { createAccount } from '#contracts/rpc/accounts/create-account';
 import { listAccounts } from '#contracts/rpc/accounts/list-accounts';
+import { endChat } from '#contracts/rpc/chat/end-chat';
+import { listChats } from '#contracts/rpc/chat/list-chats';
+import { readChat } from '#contracts/rpc/chat/read-chat';
+import { sendChatMessage } from '#contracts/rpc/chat/send-chat-message';
+import { startChat } from '#contracts/rpc/chat/start-chat';
+import { switchChatProvider } from '#contracts/rpc/chat/switch-chat-provider';
 import { createRpcClient } from '#contracts/rpc/client';
 import { getAppLogin } from '#contracts/rpc/desktop/get-app-login';
 import { listDesktopApps } from '#contracts/rpc/desktop/list-desktop-apps';
@@ -251,6 +257,68 @@ describe('desktop apps', () => {
     expect(getAppLogin.params.safeParse({ account: 'work', provider: 'claude', token: 'x' }).success).toBe(false);
     expect(getAppLogin.result.safeParse({ login: 'signedIn', isOtherAccount: true }).success).toBe(true);
     expect(getAppLogin.result.safeParse({ login: 'notInstalled', isOtherAccount: false }).success).toBe(false);
+  });
+});
+
+describe('the chat methods', () => {
+  const chat = {
+    id: '2f1c0d6e-9d52-4a4e-8e0e-1d6f6b3a7c11',
+    account: 'work',
+    provider: 'claude',
+    isBusy: true,
+    messages: [{ role: 'user', text: 'Hi', at: '2026-11-18T12:00:00.000Z' }],
+    turn: { text: 'Thinking', tools: ['Read'] },
+    updatedAt: '2026-11-18T12:00:00.000Z',
+  };
+
+  it('run on the machine that holds the live process', () => {
+    for (const method of [startChat, sendChatMessage, readChat, switchChatProvider, listChats, endChat]) {
+      expect(method.routing).toBe('machine');
+    }
+  });
+  it('start a chat for an account and a provider, and nothing else', () => {
+    expect(startChat.params.safeParse({ account: 'work', provider: 'claude', directory: '/code' }).success).toBe(true);
+    expect(startChat.params.safeParse({ account: 'work', provider: 'gemini' }).success).toBe(false);
+    expect(startChat.params.safeParse({ account: 'work', provider: 'claude', token: 'x' }).success).toBe(false);
+  });
+  it('refuse an empty message', () => {
+    expect(sendChatMessage.params.safeParse({ id: chat.id, text: 'Hi' }).success).toBe(true);
+    expect(sendChatMessage.params.safeParse({ id: chat.id, text: '' }).success).toBe(false);
+  });
+  it('answer with the chat, and with the same shape while it is read again', () => {
+    expect(sendChatMessage.result.safeParse(chat).success).toBe(true);
+    expect(readChat.result.safeParse({ ...chat, turn: undefined, isBusy: false, error: 'usage limit' }).success).toBe(
+      true
+    );
+    expect(readChat.result.safeParse({ ...chat, messages: [{ role: 'system', text: 'x', at: 'now' }] }).success).toBe(
+      false
+    );
+  });
+  it('list a short line for each chat', () => {
+    const summary = { id: chat.id, account: 'work', provider: 'claude', preview: 'Hi', updatedAt: chat.updatedAt };
+    expect(listChats.result.safeParse([summary]).success).toBe(true);
+    expect(listChats.result.safeParse([{ ...summary, messages: [] }]).success).toBe(false);
+  });
+});
+
+describe('a thread that carries its transcript', () => {
+  const thread = {
+    id: 'abc',
+    directory: '/code',
+    updatedAt: '2026-11-18T12:00:00.000Z',
+    isGuess: false,
+    isDirectoryGone: false,
+  };
+
+  it('is read, and one without it still is', () => {
+    expect(listThreads.result.safeParse([{ ...thread, transcript: '/t/session.jsonl' }]).success).toBe(true);
+    expect(listThreads.result.safeParse([thread]).success).toBe(true);
+  });
+  it('still refuses any other key', () => {
+    expect(listThreads.result.safeParse([{ ...thread, token: 'x' }]).success).toBe(false);
+  });
+  it('moves the protocol to 7, because a favo that does not know the field refuses the reply', () => {
+    expect(Protocol).toBeGreaterThanOrEqual(7);
   });
 });
 

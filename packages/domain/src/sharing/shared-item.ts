@@ -57,9 +57,9 @@ export function isItemHealthy(state: SharedItemState) {
 
 const NeverMirrored = /^(?:ntuser\.|\.Trash$)/i;
 
-export function mirrorEntries(homeEntries: string[], shared: string[]) {
-  const ownRoots = new Set(shared.map((item) => item.split('/')[0]));
-  return homeEntries.filter((entry) => !ownRoots.has(entry) && !NeverMirrored.test(entry)).toSorted();
+export function mirrorEntries(homeEntries: string[], shared: string[], unmirrored: string[] = []) {
+  const kept = new Set([...shared.map((item) => item.split('/')[0]), ...unmirrored]);
+  return homeEntries.filter((entry) => !kept.has(entry) && !NeverMirrored.test(entry)).toSorted();
 }
 
 export function unclassifiedEntries(baseEntries: string[], spec: { shared: string[]; private: string[] }) {

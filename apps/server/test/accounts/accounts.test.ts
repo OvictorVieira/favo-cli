@@ -35,7 +35,27 @@ describe('accounts', () => {
   it('marks a provider that is not on this machine', async () => {
     const { client } = createTestServer({ installed: ['claude'] });
     const [personal] = await client.call(listAccounts, {});
-    expect(personal!.seats.map((seat) => seat.isInstalled)).toEqual([true, false, false, false]);
+    expect(personal!.seats.map(({ provider, isInstalled }) => [provider, isInstalled])).toEqual([
+      ['claude', true],
+      ['codex', false],
+      ['antigravity', false],
+      ['opencode', false],
+      ['cursor', false],
+      ['copilot', false],
+    ]);
+  });
+  it('finds Cursor and Copilot by the command each one installs', async () => {
+    const { client } = createTestServer({ installed: ['cursor-agent', 'copilot'] });
+    const [personal] = await client.call(listAccounts, {});
+    const installed = personal!.seats.filter((seat) => seat.isInstalled).map((seat) => seat.provider);
+    expect(installed).toEqual(['cursor', 'copilot']);
+  });
+  it('keeps the Cursor and Copilot logins in their own cells', async () => {
+    const { client } = createTestServer();
+    const [personal] = await client.call(listAccounts, {});
+    const seat = (provider: string) => personal!.seats.find((candidate) => candidate.provider === provider);
+    expect(seat('cursor')?.loginScope).toBe('perAccount');
+    expect(seat('copilot')?.loginScope).toBe('perAccount');
   });
   it('knows Antigravity has no sign-out command', async () => {
     const { client } = createTestServer();

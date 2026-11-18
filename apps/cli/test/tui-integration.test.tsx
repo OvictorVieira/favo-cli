@@ -5,6 +5,7 @@ import { useApp } from '@favo/client/shared/stores/app';
 import { createAccount } from '@favo/contracts/rpc/accounts/create-account';
 import { listAccounts } from '@favo/contracts/rpc/accounts/list-accounts';
 import { addMachine } from '@favo/contracts/rpc/machines/add-machine';
+import { provisionSeat } from '@favo/contracts/rpc/seats/provision-seat';
 import { recordThread } from '@favo/contracts/rpc/threads/record-thread';
 import { recordProviderUpdate } from '@favo/contracts/rpc/updates/record-provider-update';
 import { LoginState } from '@favo/contracts/rpc/views';
@@ -19,7 +20,10 @@ console.error = (...args: unknown[]) => {
 
 let dispose: (() => Promise<void>) | undefined;
 
-async function openFleet(callerEnv?: Record<string, string>) {
+async function openFleet(
+  callerEnv?: Record<string, string>,
+  options: { rateLimited?: boolean; failRun?: number; alsoSignedIn?: ('codex' | 'antigravity' | 'opencode')[] } = {}
+) {
   const mac = createTestServer({ callerEnv });
   const devbox = createTestServer({ hostname: 'devbox' });
   await seedClaudeBase(mac.fileSystem);
@@ -28,6 +32,10 @@ async function openFleet(callerEnv?: Record<string, string>) {
   await mac.client.call(addMachine, { target: 'bee@devbox' });
   mac.remotes.connect('devbox', devbox.router);
   mac.clis.claude.login = { login: LoginState.signedIn, identity: 'mac@bee.dev', plan: 'max' };
+  for (const provider of options.alsoSignedIn ?? []) {
+    mac.clis[provider].login = { login: LoginState.signedIn, identity: `mac@${provider}.dev` };
+    await mac.client.call(provisionSeat, { account: 'work', provider });
+  }
   devbox.clis.claude.login = { login: LoginState.signedIn, identity: 'devbox@bee.dev' };
   const copied: string[] = [];
   const plans: TerminalPlan[] = [];
@@ -42,7 +50,8 @@ async function openFleet(callerEnv?: Record<string, string>) {
     terminalGateway: {
       async run(plan) {
         plans.push(plan);
-        return 0;
+        if (plans.length === options.failRun) throw new Error('could not start the provider');
+        return { exitCode: 0, rateLimitDetected: options.rateLimited === true && plans.length === 1 };
       },
     },
   });
@@ -53,6 +62,11 @@ async function openFleet(callerEnv?: Record<string, string>) {
   await readsSettled();
   await view.flush();
   return { ...view, mac, devbox, copied, plans };
+}
+
+async function plansReach(plans: unknown[], count: number) {
+  for (let wait = 0; wait < 200 && plans.length < count; wait++) await Bun.sleep(10);
+  expect(plans).toHaveLength(count);
 }
 
 async function readsSettled() {
@@ -279,6 +293,110 @@ describe('the TUI on a real backend', () => {
     await waitFor(() => plans.length === 1);
     expect(plans[0]?.command).toBe('/usr/bin/claude');
     expect(plans[0]?.env.CLAUDE_CONFIG_DIR).toBe(`${Home}/.favo/accounts/work/claude`);
+  });
+  describe('when a launch reports a usage limit', () => {
+    async function limitedLaunch() {
+      const view = await openFleet(undefined, { rateLimited: true, alsoSignedIn: ['codex', 'opencode'] });
+      useApp.getState().selectRow('seat:local/work/claude');
+      await view.flush();
+      await useApp.getState().launchSelectedSeat();
+      await view.waitForFrame((frame) => frame.includes('provider usage limit'));
+      return view;
+    }
+
+    test('offers the signed-in providers of the same account, and no other', async () => {
+      const view = await limitedLaunch();
+      const frame = view.captureCharFrame();
+      expect(frame).toContain('Claude Code reached its limit');
+      expect(frame.match(/limit unavailable/g)).toHaveLength(2);
+      expect(frame).toContain('Codex');
+      expect(frame).toContain('OpenCode');
+      expect(frame).not.toContain('Antigravity ·');
+    });
+    test('stops when asked, and starts nothing', async () => {
+      const view = await limitedLaunch();
+      view.mockInput.pressKey('q');
+      await view.waitForFrame((frame) => !frame.includes('provider usage limit'));
+      expect(view.plans).toHaveLength(1);
+      expect(useApp.getState().pendingHandoff).toBeUndefined();
+    });
+    test('tells the user when the next provider cannot start, and keeps the choice open', async () => {
+      const view = await openFleet(undefined, { rateLimited: true, failRun: 2, alsoSignedIn: ['codex'] });
+      useApp.getState().selectRow('seat:local/work/claude');
+      await view.flush();
+      await useApp.getState().launchSelectedSeat();
+      await view.waitForFrame((frame) => frame.includes('provider usage limit'));
+
+      view.mockInput.pressKey('RETURN');
+      await view.waitForFrame((frame) => frame.includes('could not start the provider'));
+
+      expect(view.captureCharFrame()).toContain('provider usage limit');
+      expect(useApp.getState().pendingHandoff).toBeDefined();
+    });
+    test('continues in the provider it points at, in the same folder, with a prompt about the first one', async () => {
+      const view = await limitedLaunch();
+      view.mockInput.pressKey('RETURN');
+      await plansReach(view.plans, 2);
+      expect(view.plans[1]?.command).toBe('/usr/bin/codex');
+      expect(view.plans[1]?.cwd).toBe(view.plans[0]?.cwd);
+      expect(view.plans[1]?.args.at(-1)).toContain('Claude Code');
+    });
+  });
+  describe('the chat screen', () => {
+    async function openChat(alsoSignedIn: ('codex' | 'antigravity' | 'opencode')[] = []) {
+      const view = await openFleet(undefined, { alsoSignedIn });
+      useApp.getState().selectRow('seat:local/work/claude');
+      await view.flush();
+      view.mockInput.pressKey('w');
+      await view.waitForFrame((frame) => frame.includes('chat with Claude Code'));
+      return view;
+    }
+
+    async function say(view: Awaited<ReturnType<typeof openChat>>, text: string) {
+      await view.mockInput.typeText(text);
+      view.mockInput.pressKey('RETURN');
+      await view.waitForFrame((frame) => frame.includes(text));
+    }
+
+    test('opens a chat for the selected seat and shows what the provider answers', async () => {
+      const view = await openChat();
+      await say(view, 'Hello');
+      await view.waitForFrame((frame) => frame.includes('ok'));
+      expect(view.mac.chatRunners.claude.sent).toEqual(['Hello']);
+      expect(view.mac.chatRunners.claude.started[0]?.env.CLAUDE_CONFIG_DIR).toBe(`${Home}/.favo/accounts/work/claude`);
+    });
+    test('changes the provider with tab, and the next one receives the conversation', async () => {
+      const view = await openChat(['codex']);
+      await say(view, 'Hello');
+      await view.waitForFrame((frame) => frame.includes('ok'));
+
+      view.mockInput.pressKey('TAB');
+      await view.waitForFrame((frame) => frame.includes('chat with Codex'));
+      await say(view, 'More');
+
+      await plansReach(view.mac.chatRunners.codex.sent, 1);
+      const [first] = view.mac.chatRunners.codex.sent;
+      expect(first).toContain('Hello');
+      expect(first?.trimEnd().endsWith('More')).toBe(true);
+      expect(view.mac.chatRunners.claude.endings).toBe(1);
+    });
+    test('goes back to the comb with escape and lets the provider process go', async () => {
+      const view = await openChat();
+      await say(view, 'Hello');
+      view.mockInput.pressEscape();
+      for (let wait = 0; wait < 100 && useApp.getState().chat !== undefined; wait++) await Bun.sleep(25);
+      await view.flush();
+      expect(view.captureCharFrame()).toContain('macbook · this machine');
+      await plansReach(Array.from({ length: view.mac.chatRunners.claude.endings }), 1);
+    });
+    test('says so when the provider cannot chat yet', async () => {
+      const view = await openFleet(undefined, { alsoSignedIn: ['opencode'] });
+      useApp.getState().selectRow('seat:local/work/opencode');
+      await view.flush();
+      view.mockInput.pressKey('w');
+      await view.waitForFrame((frame) => frame.includes('not available yet'));
+      expect(view.captureCharFrame()).not.toContain('chat with OpenCode as work');
+    });
   });
   test('launches the other machine through ssh', async () => {
     const { plans, mockInput, flush, waitFor } = await openFleet();

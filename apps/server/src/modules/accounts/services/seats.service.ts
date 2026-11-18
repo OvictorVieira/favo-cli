@@ -1,6 +1,6 @@
 import { LoginState, type SeatStatus } from '@favo/contracts/rpc/views';
 import { assertAccountName, isPersonalAccount } from '@favo/domain/accounts/account';
-import { type ProviderId, ProviderOrder, Providers } from '@favo/domain/providers/provider';
+import { type ProviderId, ProviderOrder, type ProviderSpec, Providers } from '@favo/domain/providers/provider';
 import { assertDomain, DomainErrorCode } from '@favo/domain/shared/domain-error';
 import {
   EntryKind,
@@ -109,7 +109,7 @@ export class SeatsService {
         linked.push(name);
       }
     }
-    if (spec.mirrorsHome) await this.mirrorHome(seatHome, spec.shared);
+    if (spec.mirrorsHome) await this.mirrorHome(seatHome, spec);
     return { account, provider, linked, problems };
   }
 
@@ -124,8 +124,8 @@ export class SeatsService {
     return repairs;
   }
 
-  private async mirrorHome(seatHome: string, shared: string[]) {
-    const entries = mirrorEntries(await this.fileSystem.list(this.paths.home), shared);
+  private async mirrorHome(seatHome: string, { shared, unmirrored }: ProviderSpec) {
+    const entries = mirrorEntries(await this.fileSystem.list(this.paths.home), shared, unmirrored);
     for (const entry of entries) {
       const target = `${this.paths.home}/${entry}`;
       const path = `${seatHome}/${entry}`;

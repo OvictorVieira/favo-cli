@@ -7,6 +7,10 @@ import { AccountsService } from '@/modules/accounts/services/accounts.service';
 import { HooksService } from '@/modules/accounts/services/hooks.service';
 import { SeatsService } from '@/modules/accounts/services/seats.service';
 import { ThreadsService } from '@/modules/accounts/services/threads.service';
+import { registerChatController } from '@/modules/chat/controllers/chat.controller';
+import type { ChatRunners } from '@/modules/chat/gateways/chat-runner';
+import { ConversationRepository } from '@/modules/chat/repositories/conversation.repository';
+import { ChatService } from '@/modules/chat/services/chat.service';
 import { registerDesktopController } from '@/modules/desktop/controllers/desktop.controller';
 import type { DesktopApps } from '@/modules/desktop/gateways/desktop-apps';
 import { DesktopAppsService } from '@/modules/desktop/services/desktop-apps.service';
@@ -57,6 +61,7 @@ export type ServerGateways = {
   shell: ShellEnvironment;
   clock: Clock;
   clis: Record<ProviderId, ProviderCli>;
+  chatRunners: ChatRunners;
   ssh: Ssh;
   tailscale: Tailscale;
   remotes: RemoteBackends;
@@ -82,6 +87,7 @@ export function createServer(gateways: ServerGateways, options: ServerOptions) {
     shell,
     clock,
     clis,
+    chatRunners,
     ssh,
     tailscale,
     remotes,
@@ -176,6 +182,7 @@ export function createServer(gateways: ServerGateways, options: ServerOptions) {
   );
   const themes = new ThemesService(new ThemeRepository(fileSystem, paths), config);
   const desktop = new DesktopAppsService(desktopApps, seats, providers, fileSystem, paths, host);
+  const chat = new ChatService(new ConversationRepository(fileSystem, paths), providers, seats, chatRunners, clock);
   registerSystemController(router, host);
   registerAccountsController(router, accounts, seats, threads, hooks);
   registerUsageController(router, limits, tokens, prices, usageView);
@@ -184,6 +191,7 @@ export function createServer(gateways: ServerGateways, options: ServerOptions) {
   registerDesktopController(router, desktop);
   registerThemesController(router, themes);
   registerDirectoriesController(router, directories);
+  registerChatController(router, chat);
   router.forwardWith((request) => machines.forward(request));
   return {
     router,

@@ -99,6 +99,36 @@ describe('antigravity private home', () => {
   });
 });
 
+describe('cursor and copilot private homes', () => {
+  it.each([
+    ['cursor', '.cursor', 'skills', 'chats'],
+    ['copilot', '.copilot', 'skills', 'session-state'],
+  ] as const)(
+    'keeps the %s login in the seat by leaving the macOS Library out of it',
+    async (provider, folder, shared, own) => {
+      const { client, fileSystem } = createTestServer();
+      await fileSystem.writePrivateText(`${Home}/.gitconfig`, '[user]');
+      await fileSystem.ensureDirectory(`${Home}/Library/Keychains`);
+      await fileSystem.ensureDirectory(`${Home}/${folder}/${shared}`);
+      await fileSystem.ensureDirectory(`${Home}/${folder}/${own}`);
+      await client.call(createAccount, { name: 'work' });
+      await client.call(provisionSeat, { account: 'work', provider });
+      const seat = `${Home}/.favo/accounts/work/${provider}`;
+      expect((await fileSystem.entry(`${seat}/Library`)).kind).toBe(EntryKind.missing);
+      expect((await fileSystem.entry(`${seat}/.gitconfig`)).target).toBe(`${Home}/.gitconfig`);
+      expect((await fileSystem.entry(`${seat}/${folder}/${shared}`)).kind).toBe(EntryKind.link);
+      expect((await fileSystem.entry(`${seat}/${folder}/${own}`)).kind).toBe(EntryKind.missing);
+    }
+  );
+  it('still mirrors the Library for a provider that did not ask to keep it out', async () => {
+    const { client, fileSystem } = createTestServer();
+    await fileSystem.ensureDirectory(`${Home}/Library/Keychains`);
+    await client.call(createAccount, { name: 'work' });
+    await client.call(provisionSeat, { account: 'work', provider: 'antigravity' });
+    expect((await fileSystem.entry(`${Home}/.favo/accounts/work/antigravity/Library`)).target).toBe(`${Home}/Library`);
+  });
+});
+
 describe('antigravity settings', () => {
   it('leaves each cell its own settings.json, which agy replaces on every save', async () => {
     const { client, fileSystem } = createTestServer();

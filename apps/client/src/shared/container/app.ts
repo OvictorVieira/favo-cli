@@ -1,5 +1,6 @@
 import { createRpcClient } from '@favo/contracts/rpc/client';
 import type { RpcTransport } from '@favo/contracts/rpc/envelope';
+import { ApiChatRepository } from '@/modules/chat/app/repositories/ApiChatRepository';
 import { ApiFleetRepository } from '@/modules/comb/app/repositories/ApiFleetRepository';
 import { ApiDirectoryRepository } from '@/modules/directories/app/repositories/ApiDirectoryRepository';
 import { ApiMachineRepository } from '@/modules/machines/app/repositories/ApiMachineRepository';
@@ -28,6 +29,7 @@ export function bootstrapAppContainer(input: {
   container.register('IUsageRepository', new ApiUsageRepository(client));
   container.register('IProviderCliRepository', new ApiProviderCliRepository(client));
   container.register('IDirectoryRepository', new ApiDirectoryRepository(client));
+  container.register('IChatRepository', new ApiChatRepository(client));
   container.register('IClipboardGateway', input.clipboardGateway);
   container.register('ITerminalGateway', input.terminalGateway);
 }

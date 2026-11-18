@@ -18,6 +18,8 @@ export function useCombKeys(props: CombKeys) {
   const { onOpenDesktopApp, onGoBackToThread } = props;
   const moveRow = useApp((state) => state.moveRow);
   const moveAccount = useApp((state) => state.moveAccount);
+  const selectedSeat = useApp((state) => state.selectedSeat);
+  const openChat = useApp((state) => state.openChat);
   const moveMachine = useApp((state) => state.moveMachine);
   const openSelectedSeat = useApp((state) => state.openSelectedSeat);
   const signInSelectedSeat = useApp((state) => state.signInSelectedSeat);
@@ -58,6 +60,7 @@ export function useCombKeys(props: CombKeys) {
     else if (key.name === 'tab') moveMachine(1);
     else if (key.name === 'return') void error.handle(openSelectedSeat)();
     else if (key.name === 'b') void error.handle(onGoBackToThread)();
+    else if (key.name === 'w' && selectedSeat) void error.handle(() => openChat(selectedSeat))();
     else if (key.name === 's') void error.handle(signInSelectedSeat)();
     else if (key.name === 'o') void error.handle(signOutSelectedSeat)();
     else if (key.name === 'c') void error.handle(copySelectedPath)();
