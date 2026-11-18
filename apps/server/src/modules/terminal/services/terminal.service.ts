@@ -6,6 +6,7 @@ import { Providers } from '@favo/domain/providers/provider';
 import { assertDomain, DomainErrorCode } from '@favo/domain/shared/domain-error';
 import { herdrReleaseStep } from '@favo/domain/terminal/herdr';
 import {
+  DangerouslySkipPermissionsFlag,
   favoArgumentsFor,
   remoteTerminalPlan,
   TerminalAction,
@@ -18,6 +19,7 @@ import type { DirectoriesService } from '@/modules/directories/services/director
 import type { MachinesService } from '@/modules/machines/services/machines.service';
 import type { ProviderRunRepository } from '@/modules/providers/repositories/provider-run.repository';
 import type { ProvidersService } from '@/modules/providers/services/providers.service';
+import { permissionArgumentsFor } from '@/modules/providers/utils/permission-options';
 import type { ConfigRepository } from '@/modules/system/repositories/config.repository';
 
 export class TerminalService {
@@ -30,7 +32,8 @@ export class TerminalService {
     private readonly config: ConfigRepository,
     private readonly runs: ProviderRunRepository,
     private readonly callerEnv: Record<string, string | undefined>,
-    private readonly binary?: string
+    private readonly binary?: string,
+    private readonly isDangerouslySkippingPermissions = false
   ) {}
 
   async plan(params: PlanTerminalParams): Promise<TerminalPlan> {
@@ -47,7 +50,10 @@ export class TerminalService {
         await this.assertKeepsThreads(machine);
       }
       const provider = Providers[params.provider].executable;
-      return remoteTerminalPlan(machine.target!, machine.system, favoArgumentsFor({ ...params, provider }));
+      return remoteTerminalPlan(machine.target!, machine.system, [
+        ...(this.isDangerouslySkippingPermissions ? [DangerouslySkipPermissionsFlag] : []),
+        ...favoArgumentsFor({ ...params, provider }),
+      ]);
     }
     return this.planLocal(params);
   }
@@ -81,6 +87,7 @@ export class TerminalService {
       );
       return { command: binary, args: [...logoutArguments, ...isolation], env, unsetEnv: [] };
     }
+    const permissionArguments = this.isDangerouslySkippingPermissions ? permissionArgumentsFor(provider) : [];
     const launch = cli.launchEnvironment(this.callerEnv);
     const launchId = crypto.randomUUID();
     const folder = directory ? await this.directories.requireExisting(directory) : undefined;
@@ -93,6 +100,7 @@ export class TerminalService {
       command: binary,
       args: [
         ...isolation,
+        ...permissionArguments,
         ...(await this.config.launchArgsOf(provider)),
         ...(target.id ? resumeArgumentsOf(Providers[provider], target.id) : []),
         ...args,

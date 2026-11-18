@@ -10,6 +10,7 @@ export type FakeCodexScript = {
   tools?: Json[];
   failure?: string;
   asksApproval?: boolean;
+  permissionRequest?: { id: string; permissions: Record<string, unknown> };
   holdsThread?: boolean;
 };
 
@@ -45,6 +46,12 @@ export function fakeCodexRunner(script: FakeCodexScript = {}) {
             say({ id: message.id, result: { turn: { id: 't-1' } } });
             for (const item of script.tools ?? []) say({ method: 'item/started', params: { item } });
             if (script.asksApproval) say({ id: 900, method: 'item/commandExecution/requestApproval', params: {} });
+            if (script.permissionRequest)
+              say({
+                id: script.permissionRequest.id,
+                method: 'item/permissions/requestApproval',
+                params: { permissions: script.permissionRequest.permissions },
+              });
             for (const delta of script.chunks ?? ['ok']) say({ method: 'item/agentMessage/delta', params: { delta } });
             const text = script.finalText ?? (script.chunks ?? ['ok']).join('');
             say({ method: 'item/completed', params: { item: { type: 'agentMessage', text } } });

@@ -12,6 +12,7 @@ type KeyBarProps = {
 
 export function KeyBar(props: KeyBarProps) {
   const selectedSeat = useApp((state) => state.selectedSeat);
+  const openChatHistory = useApp((state) => state.openChatHistory);
   const openChat = useApp((state) => state.openChat);
   const selectedDesktopApp = useApp((state) => state.selectedDesktopApp);
   const canOpenDesktopApp = useApp((state) => state.canOpenDesktopApp);
@@ -50,6 +51,7 @@ export function KeyBar(props: KeyBarProps) {
       {!!selectedSeat?.isSignedIn && (
         <KeyHint keys="w" label="chat" onPress={error.handle(() => openChat(selectedSeat))} />
       )}
+      <KeyHint keys="W" label="history" onPress={error.handle(openChatHistory)} />
       {!!selectedSeat && <KeyHint keys="c" label="copy path" onPress={error.handle(copySelectedPath)} />}
       {canOpenDesktopApp && !!selectedDesktopApp && (
         <KeyHint keys="p" label={`open ${selectedDesktopApp.label}`} onPress={error.handle(props.onOpenDesktopApp)} />

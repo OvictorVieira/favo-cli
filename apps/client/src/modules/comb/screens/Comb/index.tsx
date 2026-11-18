@@ -4,6 +4,7 @@ import { useTerminalDimensions } from '@opentui/react';
 import { useEffect, useRef, useState } from 'react';
 import { AddAccount } from '@/modules/accounts/screens/AddAccount';
 import { RenameAccount } from '@/modules/accounts/screens/RenameAccount';
+import { ChatHistoryScreen } from '@/modules/chat/screens/ChatHistoryScreen';
 import { ChatScreen } from '@/modules/chat/screens/ChatScreen';
 import { Header } from '@/modules/comb/screens/Comb/Header';
 import { HelpDialog } from '@/modules/comb/screens/Comb/HelpDialog';
@@ -45,6 +46,7 @@ export function Comb({ onQuit }: { onQuit(): void }) {
   const updateProviderClis = useApp((state) => state.updateProviderClis);
   const isUpdatingProviderClis = useApp((state) => state.isUpdatingProviderClis);
   const pendingHandoff = useApp((state) => state.pendingHandoff);
+  const isChatHistoryOpen = useApp((state) => state.isChatHistoryOpen);
   const chat = useApp((state) => state.chat);
   const openProviderClis = useApp((state) => state.openProviderClis);
   const selectedSeat = useApp((state) => state.selectedSeat);
@@ -72,6 +74,7 @@ export function Comb({ onQuit }: { onQuit(): void }) {
   const isWide = width >= WideWidth;
   const isCompact = !isWide || height < TallHeight;
   const isScreenOpen =
+    isChatHistoryOpen ||
     isHelpOpen ||
     isAddAccountOpen ||
     isRenameAccountOpen ||
@@ -247,6 +250,7 @@ export function Comb({ onQuit }: { onQuit(): void }) {
       {isThreadPickerOpen && <ThreadPicker />}
       {!!confirmation && <ConfirmDialog confirmation={confirmation} onClose={() => setConfirmation(undefined)} />}
       {!!pendingHandoff && <HandoffDialog />}
+      {isChatHistoryOpen && <ChatHistoryScreen />}
       {!!chat && <ChatScreen />}
     </box>
   );

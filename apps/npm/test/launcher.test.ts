@@ -433,6 +433,29 @@ describe('an unsupported host', () => {
 });
 
 describe.skipIf(isWindows)('signals', () => {
+  it('publishes readiness only after favo can handle SIGTERM', async () => {
+    const fixture = `${import.meta.dir}/support/fake-favo.ts`;
+    const script = `
+      process.argv = ['bun', 'fake-favo', '--wait-for-term'];
+      const log = console.log;
+      console.log = (...args) => {
+        log(...args);
+        process.kill(process.pid, 'SIGTERM');
+      };
+      await import(${JSON.stringify(fixture)});
+    `;
+    const child = Bun.spawn([process.execPath, '--eval', script], {
+      stdin: 'ignore',
+      stdout: 'pipe',
+      stderr: 'pipe',
+    });
+
+    const { stdout, code } = await finished(child);
+
+    expect(JSON.parse(stdout)).toEqual(['--wait-for-term']);
+    expect(code).toBe(42);
+  });
+
   it('forwards SIGTERM to favo and exits with the code favo chose', async () => {
     const child = launch(['--wait-for-term']);
     const stdout = child.stdout.getReader();

@@ -2,6 +2,7 @@ import { ProviderId } from '@favo/domain/providers/provider';
 import { ChatRunner, type ChatSession, type ChatSessionSpec } from '@/modules/chat/gateways/chat-runner';
 import { startOneShotSession } from '@/modules/chat/gateways/one-shot.chat-session';
 import { opencodeEventsOf } from '@/modules/chat/utils/opencode-events';
+import { permissionArgumentsFor } from '@/modules/providers/utils/permission-options';
 import type { ProcessRunner } from '@/modules/system/gateways/process-runner';
 
 export class OpencodeChatRunner extends ChatRunner {
@@ -13,9 +14,17 @@ export class OpencodeChatRunner extends ChatRunner {
 
   start(spec: ChatSessionSpec): ChatSession {
     let known = spec.resumeSessionId;
+    const permissions = spec.isDangerouslySkippingPermissions ? permissionArgumentsFor(this.id) : [];
     return startOneShotSession(this.processes, spec, {
       label: 'OpenCode',
-      argumentsFor: (text, chatId) => ['run', '--format', 'json', ...(chatId ? ['--session', chatId] : []), text],
+      argumentsFor: (text, chatId) => [
+        'run',
+        '--format',
+        'json',
+        ...permissions,
+        ...(chatId ? ['--session', chatId] : []),
+        text,
+      ],
       eventsOf: (line) => {
         const events = opencodeEventsOf(line, known);
         for (const event of events) if (event.type === 'session') known = event.sessionId;

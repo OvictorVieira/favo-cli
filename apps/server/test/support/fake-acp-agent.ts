@@ -12,6 +12,7 @@ export type FakeAcpScript = {
   stopReason?: string;
   promptError?: string;
   asksPermission?: boolean;
+  permissionOptions?: { optionId: string; kind: string }[];
   replaysHistoryOnLoad?: string[];
   neverAnswersPrompt?: boolean;
   holdsSession?: boolean;
@@ -70,7 +71,12 @@ export function fakeAcpRunner(script: FakeAcpScript = {}) {
           if (message.method === 'session/prompt' && !script.neverAnswersPrompt) {
             update('available_commands_update');
             for (const tool of script.tools ?? []) update('tool_call', { title: tool });
-            if (script.asksPermission) say({ id: 900, method: 'session/request_permission', params: { options: [] } });
+            if (script.asksPermission)
+              say({
+                id: 900,
+                method: 'session/request_permission',
+                params: { options: script.permissionOptions ?? [] },
+              });
             for (const text of script.chunks ?? ['ok'])
               update('agent_message_chunk', { content: { type: 'text', text } });
             if (script.promptError) say({ id: message.id, error: { code: -32000, message: script.promptError } });

@@ -30,7 +30,10 @@ import { favoPathsOf } from '@/shared/config/favo-paths';
 
 const FavoBinaryName = 'favo';
 
-export function createProductionServer(env: Record<string, string | undefined>) {
+export function createProductionServer(
+  env: Record<string, string | undefined>,
+  isDangerouslySkippingPermissions = false
+) {
   const isWindows = platform() === 'win32';
   const home = forwardSlashes(env.HOME ?? homedir());
   const paths = favoPathsOf({
@@ -75,6 +78,7 @@ export function createProductionServer(env: Record<string, string | undefined>) 
     },
     {
       paths,
+      isDangerouslySkippingPermissions,
       host: { hostname: name, platform: platform(), arch: arch(), home, directory: process.cwd() },
       callerEnv: env,
       pid: process.pid,

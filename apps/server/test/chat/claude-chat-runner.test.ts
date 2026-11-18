@@ -46,6 +46,14 @@ describe('Claude chat runner', () => {
     });
     expect(processes.calls[0]?.args.join(' ')).toBe(streaming.replace('claude ', ''));
   });
+  it('bypasses permissions only when the favo session opts in', () => {
+    const processes = recordingRunner([]);
+    const session = new ClaudeChatRunner(processes).start({ ...spec, isDangerouslySkippingPermissions: true });
+    expect(processes.calls[0]?.args).toContain('--dangerously-skip-permissions');
+    session.end();
+    new ClaudeChatRunner(processes).start(spec).end();
+    expect(processes.calls[1]?.args).not.toContain('--dangerously-skip-permissions');
+  });
   it('resumes its own session when it has one', () => {
     const processes = recordingRunner([]);
     processes.converse(`${streaming} --resume s-0`, []);

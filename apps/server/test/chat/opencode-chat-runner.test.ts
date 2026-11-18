@@ -39,6 +39,24 @@ describe('OpenCode chat runner', () => {
       hasNoInput: true,
     });
   });
+  it('keeps permission bypass on every message and resume only after opt-in', async () => {
+    const agent = oneShotRunner([{ lines: [] }, { lines: [] }]);
+    const session = new OpencodeChatRunner(agent.runner).start({
+      ...spec,
+      resumeSessionId: 'existing',
+      isDangerouslySkippingPermissions: true,
+    });
+    session.send('first');
+    await settled();
+    session.send('second');
+    await settled();
+    expect(agent.opened).toHaveLength(2);
+    for (const request of agent.opened) {
+      expect(request.args).toContain('--auto');
+      expect(request.args).toContain('existing');
+    }
+    session.end();
+  });
   it('turns what it prints into one turn of events, and the exit into the end of the turn', async () => {
     const { session, events } = started([{ lines: [stepStart, tool('bash'), said('a.txt'), stepFinish] }]);
     session.send('Hi');

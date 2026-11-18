@@ -15,7 +15,7 @@ async function main() {
   try {
     if (process.argv[2] === HookCommand) return await runHook(process.argv.slice(3), process.env);
     const command = parseCommand(process.argv.slice(2));
-    const server = createProductionServer(process.env);
+    const server = createProductionServer(process.env, command.isDangerouslySkippingPermissions);
     await server.prepare();
     if (command.kind === CommandKind.serve) {
       await serveStdio(server.router, Bun.stdin.stream(), (line) => process.stdout.write(`${line}\n`), server.close);

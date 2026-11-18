@@ -1,4 +1,4 @@
-import type { ChatView } from '@favo/contracts/rpc/views';
+import type { ChatSummary, ChatView } from '@favo/contracts/rpc/views';
 import { ChatProviders } from '@favo/domain/chat/chat-providers';
 import { LocalMachineId } from '@favo/domain/machines/machine';
 import type { Seat } from '@/modules/comb/app/entities/Seat';
@@ -9,6 +9,11 @@ import type { ServiceCreator } from '@/shared/stores/app';
 export type ChatService = {
   chat?: ChatView;
   chatInput: string;
+  chatHistory: ChatSummary[];
+  isChatHistoryOpen: boolean;
+  openChatHistory(): Promise<void>;
+  closeChatHistory(): void;
+  resumeChat(id: string): Promise<void>;
   openChat(seat: Seat): Promise<void>;
   changeChatInput(input: string): void;
   sendChatInput(): Promise<void>;
@@ -21,36 +26,35 @@ const FollowIntervalMs = 250;
 export const createChatService: ServiceCreator<ChatService> = (set, get) => {
   let timer: ReturnType<typeof setTimeout> | undefined;
 
-  function follow(chat: ChatView) {
-    clearTimeout(timer);
-    set({ chat });
-    if (chat.isBusy) timer = setTimeout(() => void read(chat.id), FollowIntervalMs);
-  }
-
-  async function read(id: string) {
-    try {
-      const chat = await container.get('IChatRepository').read(id);
-      if (get().chat?.id === id) follow(chat);
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      const { chat, showToast } = get();
-      if (chat?.id === id) set({ chat: { ...chat, isBusy: false, turn: undefined, error: message } });
-      showToast(message, ToastKind.error);
-    }
-  }
-
   return {
     chat: undefined,
     chatInput: '',
+    chatHistory: [],
+    isChatHistoryOpen: false,
+    async openChatHistory() {
+      const chatRepository = container.get('IChatRepository');
+      const chatHistory = await chatRepository.list();
+      set({ chatHistory, isChatHistoryOpen: true });
+    },
+    closeChatHistory() {
+      set({ isChatHistoryOpen: false });
+    },
+    async resumeChat(id) {
+      const chatRepository = container.get('IChatRepository');
+      const chat = await chatRepository.read(id);
+      set({ chatInput: '', isChatHistoryOpen: false });
+      _follow(chat);
+    },
     async openChat(seat) {
       const { showToast, selectedDirectory } = get();
       if (seat.machineId !== LocalMachineId) {
         showToast('A chat runs on this machine only for now.', ToastKind.error);
         return;
       }
-      const chat = await container.get('IChatRepository').start(seat, selectedDirectory);
+      const chatRepository = container.get('IChatRepository');
+      const chat = await chatRepository.start(seat, selectedDirectory);
       set({ chatInput: '' });
-      follow(chat);
+      _follow(chat);
     },
     changeChatInput(input) {
       set({ chatInput: input });
@@ -60,8 +64,9 @@ export const createChatService: ServiceCreator<ChatService> = (set, get) => {
       const text = chatInput.trim();
       if (!chat || text === '' || chat.isBusy) return;
       set({ chatInput: '' });
+      const chatRepository = container.get('IChatRepository');
       try {
-        follow(await container.get('IChatRepository').send(chat.id, text));
+        _follow(await chatRepository.send(chat.id, text));
       } catch (error) {
         set({ chatInput: text });
         throw error;
@@ -79,17 +84,34 @@ export const createChatService: ServiceCreator<ChatService> = (set, get) => {
         showToast('No other signed-in provider in this account.', ToastKind.error);
         return;
       }
-      follow(await container.get('IChatRepository').switchProvider(chat.id, next));
+      const chatRepository = container.get('IChatRepository');
+      _follow(await chatRepository.switchProvider(chat.id, next));
     },
     async closeChat() {
       clearTimeout(timer);
       const { chat } = get();
       set({ chat: undefined, chatInput: '' });
-      if (chat)
-        await container
-          .get('IChatRepository')
-          .end(chat.id)
-          .catch(() => {});
+      const chatRepository = container.get('IChatRepository');
+      if (chat) await chatRepository.end(chat.id);
     },
   };
+
+  function _follow(chat: ChatView) {
+    clearTimeout(timer);
+    set({ chat });
+    if (chat.isBusy) timer = setTimeout(() => void _read(chat.id), FollowIntervalMs);
+  }
+
+  async function _read(id: string) {
+    try {
+      const chatRepository = container.get('IChatRepository');
+      const chat = await chatRepository.read(id);
+      if (get().chat?.id === id) _follow(chat);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      const { chat, showToast } = get();
+      if (chat?.id === id) set({ chat: { ...chat, isBusy: false, turn: undefined, error: message } });
+      showToast(message, ToastKind.error);
+    }
+  }
 };

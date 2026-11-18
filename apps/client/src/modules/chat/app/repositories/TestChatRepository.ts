@@ -7,6 +7,19 @@ import type { Seat } from '@/modules/comb/app/entities/Seat';
 const At = '2026-11-18T12:00:00.000Z';
 
 export class TestChatRepository implements IChatRepository {
+  async list() {
+    return Object.values(mockDb.chats)
+      .toSorted((a, b) => b.updatedAt.localeCompare(a.updatedAt))
+      .map(({ id, account, directory, provider, messages, updatedAt }) => ({
+        id,
+        account,
+        directory,
+        provider,
+        updatedAt,
+        preview: (messages.at(-1)?.text ?? '').slice(0, 80),
+      }));
+  }
+
   async start(seat: Seat, directory?: string) {
     const chat: ChatView = {
       id: `chat-${Object.keys(mockDb.chats).length + 1}`,

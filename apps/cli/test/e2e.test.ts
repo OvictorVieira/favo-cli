@@ -842,3 +842,14 @@ describe.skipIf(isWindows)('favo with a hostile machine', () => {
     expect(stdout).toContain('evil bee@evil · offline');
   });
 });
+
+describe('permission bypass from startup', () => {
+  it('passes the provider flag only when opted in at the favo entry point', async () => {
+    const bypass = await favo(['--dangerously-skip-permissions', 'claude']);
+    expect(bypass.code).toBe(3);
+    expect(bypass.stdout).toContain('args=--dangerously-skip-permissions');
+    const normal = await favo(['claude']);
+    expect(normal.code).toBe(3);
+    expect(normal.stdout).not.toContain('--dangerously-skip-permissions');
+  });
+});

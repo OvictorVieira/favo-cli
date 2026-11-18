@@ -19,6 +19,26 @@ describe('ChatService', () => {
     expect(app.state.chat).toMatchObject({ account: 'personal', provider: 'claude', isBusy: false });
     expect(app.state.chat?.directory).toBe(app.state.selectedDirectory);
   });
+  test('reopens a saved conversation after closing it without creating a new chat', async () => {
+    const app = await getApp();
+    await app.state.openChat(app.state.selectedSeat!);
+    app.state.changeChatInput('Remember the release checklist');
+    await app.state.sendChatInput();
+    const saved = app.state.chat!;
+    await app.state.closeChat();
+
+    await app.state.openChatHistory();
+    expect(app.state.chatHistory.map(({ id }) => id)).toEqual([saved.id]);
+    await app.state.resumeChat(saved.id);
+
+    expect(app.state.chat?.id).toBe(saved.id);
+    expect(app.state.chat?.messages).toEqual(saved.messages);
+    expect(app.state.isChatHistoryOpen).toBe(false);
+    app.state.changeChatInput('What did I ask?');
+    await app.state.sendChatInput();
+    expect(app.state.chat?.messages).toHaveLength(4);
+    expect(Object.keys(mockDb.chats)).toHaveLength(1);
+  });
   test('does not open a chat for a seat on another machine, and says why', async () => {
     const app = await getApp();
     app.state.selectRow('seat:devbox/personal/claude');

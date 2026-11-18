@@ -380,6 +380,31 @@ describe('the TUI on a real backend', () => {
       expect(first?.trimEnd().endsWith('More')).toBe(true);
       expect(view.mac.chatRunners.claude.endings).toBe(1);
     });
+    test('resumes a saved chat after the client restarts and continues through another provider', async () => {
+      const view = await openChat(['codex']);
+      await say(view, 'Release only after the smoke test');
+      await view.waitForFrame((frame) => frame.includes('ok'));
+      const id = useApp.getState().chat!.id;
+      await useApp.getState().closeChat();
+      useApp.setState(useApp.getInitialState(), true);
+      await useApp.getState().loadThemes();
+      await useApp.getState().loadFleet();
+      await view.flush();
+
+      view.mockInput.pressKey('W');
+      await view.waitForFrame((frame) => frame.includes('saved chats on this machine') && frame.includes('work'));
+      view.mockInput.pressKey('RETURN');
+      await view.waitForFrame((frame) => frame.includes('Release only after the smoke test'));
+      expect(useApp.getState().chat?.id).toBe(id);
+      expect(useApp.getState().chat?.account).toBe('work');
+
+      view.mockInput.pressKey('TAB');
+      await view.waitForFrame((frame) => frame.includes('chat with Codex'));
+      await say(view, 'Continue the release');
+      await plansReach(view.mac.chatRunners.codex.sent, 1);
+      expect(view.mac.chatRunners.codex.sent[0]).toContain('Release only after the smoke test');
+      expect(view.mac.chatRunners.codex.sent[0]).toContain('Continue the release');
+    });
     test('goes back to the comb with escape and lets the provider process go', async () => {
       const view = await openChat();
       await say(view, 'Hello');
@@ -390,12 +415,12 @@ describe('the TUI on a real backend', () => {
       await plansReach(Array.from({ length: view.mac.chatRunners.claude.endings }), 1);
     });
     test('says so when the provider cannot chat yet', async () => {
-      const view = await openFleet(undefined, { alsoSignedIn: ['opencode'] });
-      useApp.getState().selectRow('seat:local/work/opencode');
+      const view = await openFleet(undefined, { alsoSignedIn: ['antigravity'] });
+      useApp.getState().selectRow('seat:local/work/antigravity');
       await view.flush();
       view.mockInput.pressKey('w');
       await view.waitForFrame((frame) => frame.includes('not available yet'));
-      expect(view.captureCharFrame()).not.toContain('chat with OpenCode as work');
+      expect(view.captureCharFrame()).not.toContain('chat with Antigravity as work');
     });
   });
   test('launches the other machine through ssh', async () => {

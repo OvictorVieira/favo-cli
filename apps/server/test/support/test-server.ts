@@ -30,6 +30,7 @@ type TestServerOptions = {
   callerEnv?: Record<string, string | undefined>;
   installed?: string[];
   binary?: string;
+  isDangerouslySkippingPermissions?: boolean;
   shellVariables?: Record<string, string>;
 };
 
@@ -59,6 +60,8 @@ export function createTestServer(options: TestServerOptions = {}) {
     [ProviderId.copilot]: new ScriptedProviderCli(ProviderId.copilot),
   };
   const chatRunners = {
+    [ProviderId.opencode]: new ScriptedChatRunner(ProviderId.opencode),
+    [ProviderId.copilot]: new ScriptedChatRunner(ProviderId.copilot),
     [ProviderId.claude]: new ScriptedChatRunner(ProviderId.claude),
     [ProviderId.codex]: new ScriptedChatRunner(ProviderId.codex),
     [ProviderId.cursor]: new ScriptedChatRunner(ProviderId.cursor),
@@ -101,6 +104,7 @@ export function createTestServer(options: TestServerOptions = {}) {
       callerEnv: options.callerEnv ?? {},
       pid: UpdaterPid,
       binary: options.binary,
+      isDangerouslySkippingPermissions: options.isDangerouslySkippingPermissions,
     }
   );
   return {

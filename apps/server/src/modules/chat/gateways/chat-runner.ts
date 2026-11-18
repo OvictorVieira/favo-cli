@@ -7,6 +7,7 @@ export type ChatSessionSpec = {
   cwd?: string;
   isolationArguments: string[];
   resumeSessionId?: string;
+  isDangerouslySkippingPermissions?: boolean;
 };
 
 export type ChatSession = {

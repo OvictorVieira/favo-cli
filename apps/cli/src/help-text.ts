@@ -1,6 +1,8 @@
 export const HelpText = `favo, a honeycomb for your AI subscriptions
 
   favo                               open the comb
+  favo --dangerously-skip-permissions
+                                     skip provider approvals for this run, including switches
   favo claude [account] [args]       run a provider as an account
                                      (claude, codex, agy, opencode, cursor, copilot)
                                      the args after it go to the provider

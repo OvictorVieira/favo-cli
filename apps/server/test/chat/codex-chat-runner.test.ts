@@ -2,11 +2,12 @@ import { describe, expect, it } from 'bun:test';
 import type { ChatEvent } from '@favo/domain/chat/chat-event';
 import { settled } from '#test/support/fake-acp-agent';
 import { type FakeCodexScript, fakeCodexRunner } from '#test/support/fake-codex-agent';
+import type { ChatSessionSpec } from '@/modules/chat/gateways/chat-runner';
 import { CodexChatRunner } from '@/modules/chat/gateways/codex.chat-runner';
 
 const spec = { binary: 'codex', env: { CODEX_HOME: '/seat/work/codex' }, cwd: '/code/hive', isolationArguments: [] };
 
-function started(script: FakeCodexScript = {}, overrides: { resumeSessionId?: string; cwd?: string | undefined } = {}) {
+function started(script: FakeCodexScript = {}, overrides: Partial<ChatSessionSpec> = {}) {
   const agent = fakeCodexRunner(script);
   const session = new CodexChatRunner(agent.runner).start({ ...spec, ...overrides });
   const events: ChatEvent[] = [];
@@ -23,6 +24,29 @@ describe('Codex chat runner', () => {
     expect(opened[0]).toMatchObject({ command: 'codex', args: ['app-server'], env: spec.env, cwd: '/code/hive' });
     expect(methods(received)).toEqual(['initialize', 'initialized', 'thread/start']);
     expect(received[2]).toMatchObject({ params: { cwd: '/code/hive' } });
+  });
+  for (const resumeSessionId of [undefined, 'th-existing']) {
+    it(`opens ${resumeSessionId ?? 'a new thread'} with no approvals and no sandbox only after opt-in`, async () => {
+      const { session, received } = started(
+        { asksApproval: true },
+        { resumeSessionId, isDangerouslySkippingPermissions: true }
+      );
+      await settled();
+      expect(received[2]).toMatchObject({
+        method: resumeSessionId ? 'thread/resume' : 'thread/start',
+        params: { approvalPolicy: 'never', sandbox: 'danger-full-access' },
+      });
+      session.send('Run the tests');
+      await settled();
+      expect(received.find((message) => message.id === 900)).toMatchObject({ result: { decision: 'accept' } });
+      session.end();
+    });
+  }
+  it('leaves thread permission settings untouched without opt-in', async () => {
+    const { session, received } = started();
+    await settled();
+    expect(received[2]?.params).toEqual({ cwd: '/code/hive' });
+    session.end();
   });
   it('tells the chat the id of the thread', async () => {
     const { events } = started({ threadId: 'th-9' });
@@ -62,6 +86,23 @@ describe('Codex chat runner', () => {
     await settled();
     expect(received.find((message) => message.id === 900)).toMatchObject({ id: 900, result: { decision: 'decline' } });
   });
+  for (const isDangerouslySkippingPermissions of [false, true]) {
+    it(`grants only requested extra permissions when bypass is ${isDangerouslySkippingPermissions}`, async () => {
+      const permissions = { network: { enabled: true }, fileSystem: { write: ['/code/hive'] } };
+      const { session, received } = started(
+        { permissionRequest: { id: 'permissions-1', permissions } },
+        { isDangerouslySkippingPermissions }
+      );
+      await settled();
+      session.send('Run the tests');
+      await settled();
+      expect(received.find((message) => message.id === 'permissions-1')).toEqual({
+        id: 'permissions-1',
+        result: { permissions: isDangerouslySkippingPermissions ? permissions : {}, scope: 'turn' },
+      });
+      session.end();
+    });
+  }
   it('ends the turn with the message when the turn fails', async () => {
     const { session, events } = started({ failure: 'usage limit', chunks: [] });
     await settled();

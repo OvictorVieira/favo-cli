@@ -314,3 +314,37 @@ describe('terminal plans on another machine', () => {
     });
   });
 });
+
+describe('permission bypass launch plans', () => {
+  it('adds the provider bypass only for an opted-in run and keeps login unchanged', async () => {
+    const { client } = await serverWithWork({ isDangerouslySkippingPermissions: true });
+    expect((await client.call(planTerminal, launchWork)).args).toContain('--dangerously-skip-permissions');
+    expect((await client.call(planTerminal, { ...launchWork, action: 'login' })).args).toEqual(['login']);
+    const normal = await serverWithWork();
+    expect((await normal.client.call(planTerminal, launchWork)).args).not.toContain('--dangerously-skip-permissions');
+  });
+});
+
+describe('permission bypass for every terminal provider', () => {
+  it.each([
+    ['claude', ['--dangerously-skip-permissions']],
+    ['codex', ['--dangerously-bypass-approvals-and-sandbox']],
+    ['antigravity', ['--dangerously-skip-permissions']],
+    ['copilot', ['--allow-all']],
+    ['cursor', ['--force', '--sandbox', 'disabled', '--approve-mcps', '--trust']],
+    ['opencode', ['--auto']],
+  ] as const)('maps opted-in %s to its native options', async (provider, args) => {
+    const { client } = await serverWithWork({
+      isDangerouslySkippingPermissions: true,
+      installed: ['claude', 'codex', 'agy', 'copilot', 'cursor-agent', 'opencode'],
+    });
+    const plan = await client.call(planTerminal, { ...launchWork, provider });
+    expect(plan.args).toEqual([...args]);
+  });
+  it('carries opt-in across ssh as a favo option before the provider', async () => {
+    const { client } = await serverWithWork({ isDangerouslySkippingPermissions: true });
+    await client.call(addMachine, { target: 'bee@devbox' });
+    const plan = await client.call(planTerminal, { ...launchWork, machineId: 'devbox' });
+    expect(plan.args.at(-1)).toEndWith(encodeArguments(['--dangerously-skip-permissions', 'claude', 'work']));
+  });
+});

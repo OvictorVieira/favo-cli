@@ -30,7 +30,8 @@ export class ChatService {
     private readonly providers: ProvidersService,
     private readonly seats: SeatsService,
     private readonly runners: ChatRunners,
-    private readonly clock: Clock
+    private readonly clock: Clock,
+    private readonly isDangerouslySkippingPermissions = false
   ) {}
 
   async start(params: { account: string; provider: ProviderId; directory?: string }) {
@@ -156,6 +157,7 @@ export class ChatService {
       cwd: directory,
       isolationArguments: await this.providers.isolationArgumentsOf(account, provider),
       resumeSessionId: conversation.sessions[provider],
+      isDangerouslySkippingPermissions: this.isDangerouslySkippingPermissions,
     });
     const live: Live = { provider, session, turn: EmptyTurn, isBusy: false, work: Promise.resolve() };
     this.live.set(conversation.id, live);

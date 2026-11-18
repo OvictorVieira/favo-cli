@@ -4,6 +4,9 @@
 
 ### Added
 
+- Start favo with `--dangerously-skip-permissions` to skip agent approvals for this run, including provider switches and resumed sessions. Without it, favo keeps normal provider permissions.
+- Press `shift+w` on a seat to reopen a saved chat and continue its conversation.
+
 - When a provider session reports a usage limit, favo offers signed-in providers in the same account and shows their known remaining limit. Choosing one starts it in the same workspace with a prompt to read the previous local transcript when available.
 - favo shows its loading mark while it checks the providers signed in on each machine.
 - Press `w` on a seat for a chat that favo keeps. The provider runs behind it, and `tab` changes provider in the middle of the chat: the next one starts with the conversation so far. It works with Claude Code, Codex, GitHub Copilot, Cursor and OpenCode, and only on this machine.

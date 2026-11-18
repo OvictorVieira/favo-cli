@@ -1,11 +1,12 @@
 import { describe, expect, it } from 'bun:test';
 import type { ChatEvent } from '@favo/domain/chat/chat-event';
 import { type FakeAcpScript, fakeAcpRunner, settled } from '#test/support/fake-acp-agent';
+import type { ChatSessionSpec } from '@/modules/chat/gateways/chat-runner';
 import { CopilotChatRunner } from '@/modules/chat/gateways/copilot.chat-runner';
 
 const spec = { binary: 'copilot', env: { HOME: '/seat/work/copilot' }, cwd: '/code/hive', isolationArguments: [] };
 
-function started(script: FakeAcpScript = {}, overrides: Partial<typeof spec & { resumeSessionId: string }> = {}) {
+function started(script: FakeAcpScript = {}, overrides: Partial<ChatSessionSpec> = {}) {
   const agent = fakeAcpRunner(script);
   const session = new CopilotChatRunner(agent.runner).start({ ...spec, ...overrides });
   const events: ChatEvent[] = [];
@@ -22,6 +23,40 @@ describe('Copilot chat runner', () => {
     expect(opened[0]).toMatchObject({ command: 'copilot', args: ['--acp'], env: spec.env, cwd: '/code/hive' });
     expect(methods(received)).toEqual(['initialize', 'session/new']);
     expect(received[1]).toMatchObject({ params: { cwd: '/code/hive', mcpServers: [] } });
+  });
+  it('starts with all permissions and selects an offered approval only after opt-in', async () => {
+    const { session, opened, received } = started(
+      {
+        asksPermission: true,
+        permissionOptions: [
+          { optionId: 'deny', kind: 'reject_once' },
+          { optionId: 'permit-this-call', kind: 'allow_once' },
+        ],
+      },
+      { isDangerouslySkippingPermissions: true }
+    );
+    session.send('Run the tests');
+    await settled();
+    expect(opened[0]?.args).toContain('--allow-all');
+    expect(received.find((message) => message.id === 900)).toMatchObject({
+      result: { outcome: { outcome: 'selected', optionId: 'permit-this-call' } },
+    });
+    session.end();
+  });
+  it('does not invent an approval option when the provider only offers rejection', async () => {
+    const { session, received } = started(
+      {
+        asksPermission: true,
+        permissionOptions: [{ optionId: 'deny', kind: 'reject_once' }],
+      },
+      { isDangerouslySkippingPermissions: true }
+    );
+    session.send('Run the tests');
+    await settled();
+    expect(received.find((message) => message.id === 900)).toMatchObject({
+      result: { outcome: { outcome: 'cancelled' } },
+    });
+    session.end();
   });
   it('opens the session in an absolute folder when the chat has none, which the agent insists on', async () => {
     const { received } = started({}, { cwd: undefined });

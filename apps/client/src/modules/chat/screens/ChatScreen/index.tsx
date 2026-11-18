@@ -1,27 +1,10 @@
 import type { ChatMessageView } from '@favo/contracts/rpc/views';
 import { Providers } from '@favo/domain/providers/provider';
 import { useKeyboard } from '@opentui/react';
+import { Message } from '@/modules/chat/screens/ChatScreen/Message';
 import { KeyHint } from '@/shared/components/KeyHint';
 import { useError } from '@/shared/error/useError';
 import { useApp } from '@/shared/stores/app';
-
-function Message({ message }: { message: ChatMessageView }) {
-  const colors = useApp((state) => state.colors);
-  const isUser = message.role === 'user';
-  const speaker = isUser ? 'you' : speakerOf(message);
-  return (
-    <box flexDirection="column" flexShrink={0} marginBottom={1}>
-      <text fg={isUser ? colors.muted : colors.accent}>{speaker}</text>
-      <text fg={colors.text} wrapMode="word">
-        {message.text}
-      </text>
-    </box>
-  );
-}
-
-function speakerOf({ provider }: ChatMessageView) {
-  return provider ? Providers[provider].label : 'assistant';
-}
 
 function keyedMessages(messages: ChatMessageView[]) {
   const seen = new Map<string, number>();
@@ -87,7 +70,7 @@ export function ChatScreen() {
           value={chatInput}
           placeholder={chat.isBusy ? 'waiting for the answer…' : 'write a message'}
           onInput={changeChatInput}
-          onSubmit={() => void error.handle(sendChatInput)()}
+          onSubmit={error.handle(sendChatInput)}
           textColor={colors.text}
           placeholderColor={colors.faint}
         />

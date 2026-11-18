@@ -295,3 +295,23 @@ describe('coming back to a chat', () => {
     expect(chatRunners.claude.sent.at(-1)).toContain('first');
   });
 });
+
+describe('permission mode follows a provider switch', () => {
+  it.each([true, false])(
+    'keeps startup opt-in %j across Claude, Codex and a resumed process',
+    async (isDangerouslySkippingPermissions) => {
+      const { client, chatRunners } = createTestServer({ isDangerouslySkippingPermissions });
+      await client.call(createAccount, { name: 'work' });
+      const chat = await client.call(startChat, { account: 'work', provider: 'claude' });
+      await client.call(sendChatMessage, { id: chat.id, text: 'first' });
+      await client.call(switchChatProvider, { id: chat.id, provider: 'codex' });
+      await client.call(sendChatMessage, { id: chat.id, text: 'second' });
+      await client.call(endChat, { id: chat.id });
+      await client.call(sendChatMessage, { id: chat.id, text: 'resume' });
+      expect(chatRunners.claude.started[0]?.isDangerouslySkippingPermissions).toBe(isDangerouslySkippingPermissions);
+      expect(chatRunners.codex.started).toHaveLength(2);
+      for (const spec of chatRunners.codex.started)
+        expect(spec.isDangerouslySkippingPermissions).toBe(isDangerouslySkippingPermissions);
+    }
+  );
+});

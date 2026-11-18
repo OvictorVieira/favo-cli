@@ -46,6 +46,25 @@ describe('Cursor chat runner', () => {
       hasNoInput: true,
     });
   });
+  it('keeps permission bypass on every message and resume only after opt-in', async () => {
+    const agent = oneShotRunner([{ lines: [] }, { lines: [] }]);
+    const session = new CursorChatRunner(agent.runner).start({
+      ...spec,
+      resumeSessionId: 'existing',
+      isDangerouslySkippingPermissions: true,
+    });
+    session.send('first');
+    await settled();
+    session.send('second');
+    await settled();
+    expect(agent.opened).toHaveLength(2);
+    for (const request of agent.opened) {
+      expect(request.args).toContain('--force');
+      expect(request.args.filter((argument) => argument === '--trust')).toHaveLength(1);
+      expect(request.args).toContain('existing');
+    }
+    session.end();
+  });
   it('turns what the agent prints into one turn of events', async () => {
     const { session, events } = started([
       {

@@ -78,6 +78,7 @@ export type ServerOptions = {
   callerEnv: Record<string, string | undefined>;
   pid: number;
   binary?: string;
+  isDangerouslySkippingPermissions?: boolean;
 };
 
 export function createServer(gateways: ServerGateways, options: ServerOptions) {
@@ -97,7 +98,7 @@ export function createServer(gateways: ServerGateways, options: ServerOptions) {
     tokenLogs,
     priceSource,
   } = gateways;
-  const { paths, host, callerEnv, pid, binary } = options;
+  const { paths, host, callerEnv, pid, binary, isDangerouslySkippingPermissions } = options;
   const router = new RpcRouter();
   const providers = new ProvidersService(clis, processes, shell, paths, callerEnv);
   const config = new ConfigRepository(fileSystem, paths);
@@ -168,7 +169,8 @@ export function createServer(gateways: ServerGateways, options: ServerOptions) {
     config,
     providerRuns,
     callerEnv,
-    binary
+    binary,
+    isDangerouslySkippingPermissions
   );
   const updates = new UpdateService(
     providerUpdates,
@@ -182,7 +184,14 @@ export function createServer(gateways: ServerGateways, options: ServerOptions) {
   );
   const themes = new ThemesService(new ThemeRepository(fileSystem, paths), config);
   const desktop = new DesktopAppsService(desktopApps, seats, providers, fileSystem, paths, host);
-  const chat = new ChatService(new ConversationRepository(fileSystem, paths), providers, seats, chatRunners, clock);
+  const chat = new ChatService(
+    new ConversationRepository(fileSystem, paths),
+    providers,
+    seats,
+    chatRunners,
+    clock,
+    isDangerouslySkippingPermissions
+  );
   registerSystemController(router, host);
   registerAccountsController(router, accounts, seats, threads, hooks);
   registerUsageController(router, limits, tokens, prices, usageView);

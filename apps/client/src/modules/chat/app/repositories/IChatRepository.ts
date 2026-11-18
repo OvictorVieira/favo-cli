@@ -1,8 +1,9 @@
-import type { ChatView } from '@favo/contracts/rpc/views';
+import type { ChatSummary, ChatView } from '@favo/contracts/rpc/views';
 import type { ProviderId } from '@favo/domain/providers/provider';
 import type { Seat } from '@/modules/comb/app/entities/Seat';
 
 export type IChatRepository = {
+  list(): Promise<ChatSummary[]>;
   start(seat: Seat, directory?: string): Promise<ChatView>;
   send(id: string, text: string): Promise<ChatView>;
   read(id: string): Promise<ChatView>;

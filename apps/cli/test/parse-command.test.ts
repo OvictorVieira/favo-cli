@@ -243,3 +243,23 @@ describe('parseCommand', () => {
     expect(() => parseCommand(['list', '--nope'])).toThrow('Unknown flag');
   });
 });
+
+describe('permission bypass startup', () => {
+  it('opts in for the TUI and leaves ordinary startup unchanged', () => {
+    expect(parseCommand(['--dangerously-skip-permissions'])).toMatchObject({
+      kind: CommandKind.tui,
+      isDangerouslySkippingPermissions: true,
+    });
+    expect(parseCommand([]).isDangerouslySkippingPermissions).not.toBe(true);
+  });
+  it('accepts the global flag before a provider while preserving provider arguments', () => {
+    expect(parseCommand(['--dangerously-skip-permissions', 'codex', 'work', '--', '--model', 'x'])).toMatchObject({
+      kind: CommandKind.launch,
+      isDangerouslySkippingPermissions: true,
+      args: ['--model', 'x'],
+    });
+    expect(parseCommand(['claude', 'work', '--dangerously-skip-permissions']).args).toEqual([
+      '--dangerously-skip-permissions',
+    ]);
+  });
+});

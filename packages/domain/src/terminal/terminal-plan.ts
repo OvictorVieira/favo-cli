@@ -9,6 +9,7 @@ export type TerminalRunResult = { exitCode: number; rateLimitDetected: boolean }
 
 export const EncodedArgumentsFlag = '--argv-b64';
 export const SkipFavoFlag = '--skip-favo';
+export const DangerouslySkipPermissionsFlag = '--dangerously-skip-permissions';
 export const HoldFlag = '--hold';
 export const ProvidersFlag = '--providers';
 export const FavoOnlyFlag = '--favo-only';

@@ -1,4 +1,5 @@
 import { endChat } from '@favo/contracts/rpc/chat/end-chat';
+import { listChats } from '@favo/contracts/rpc/chat/list-chats';
 import { readChat } from '@favo/contracts/rpc/chat/read-chat';
 import { sendChatMessage } from '@favo/contracts/rpc/chat/send-chat-message';
 import { startChat } from '@favo/contracts/rpc/chat/start-chat';
@@ -10,6 +11,10 @@ import type { Seat } from '@/modules/comb/app/entities/Seat';
 
 export class ApiChatRepository implements IChatRepository {
   constructor(private readonly client: RpcClient) {}
+
+  list() {
+    return this.client.call(listChats, {});
+  }
 
   start(seat: Seat, directory?: string) {
     return this.client.call(startChat, { account: seat.account, provider: seat.provider, directory });

@@ -4,6 +4,7 @@ import { findProvider, type ProviderId } from '@favo/domain/providers/provider';
 import { assertDomain, DomainError, DomainErrorCode } from '@favo/domain/shared/domain-error';
 import type { ValueOf } from '@favo/domain/shared/value-of';
 import {
+  DangerouslySkipPermissionsFlag,
   decodeArguments,
   EncodedArgumentsFlag,
   FavoOnlyFlag,
@@ -56,6 +57,7 @@ export type Command = {
   kind: CommandKind;
   machineId?: string;
   isJson: boolean;
+  isDangerouslySkippingPermissions?: boolean;
   account?: string;
   provider?: ProviderId;
   args: string[];
@@ -78,7 +80,13 @@ export type Command = {
 
 export function parseCommand(rawArgv: string[]): Command {
   const { words, flags, passthrough } = readArguments(decodedArgv(rawArgv));
-  const base = { isJson: flags.isJson, machineId: flags.machine, directory: flags.directory, args: passthrough };
+  const base = {
+    isJson: flags.isJson,
+    machineId: flags.machine,
+    directory: flags.directory,
+    args: passthrough,
+    isDangerouslySkippingPermissions: flags.isDangerouslySkippingPermissions,
+  };
   const [first, second, third, fourth] = words;
   if (flags.isVersion) return { ...base, kind: CommandKind.version };
   if (flags.isHelp || first === 'help') return { ...base, kind: CommandKind.help };
@@ -241,6 +249,7 @@ function readArguments(argv: string[]) {
   const words: string[] = [];
   const flags = {
     isJson: false,
+    isDangerouslySkippingPermissions: false,
     isHelp: false,
     isVersion: false,
     canClose: false,
@@ -266,6 +275,7 @@ function readArguments(argv: string[]) {
     if (word === '--json') flags.isJson = true;
     else if (word === '--help' || word === '-h') flags.isHelp = true;
     else if (word === '--version' || word === '-v') flags.isVersion = true;
+    else if (word === DangerouslySkipPermissionsFlag) flags.isDangerouslySkippingPermissions = true;
     else if (word === '--close') flags.canClose = true;
     else if (word === SkipFavoFlag) flags.isFavoSkipped = true;
     else if (word === ProvidersFlag) flags.hasProviders = true;
