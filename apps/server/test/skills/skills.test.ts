@@ -238,3 +238,23 @@ test('choosing a version also brings in the skills that had no conflict', async 
   expect(chosen.skills.map((skill) => skill.name).toSorted()).toEqual(['ralph', 'review-pr']);
   expect(server.skillLibrary.adopted.toSorted()).toEqual(['edits', 'solo']);
 });
+
+test('waits for an answer that arrives after the message is sent', async () => {
+  const server = await enabledWithConflict(['a\nonly one', 'a\nonly two']);
+  server.clis.claude.login = { login: LoginState.signedIn, identity: 'bee@x.dev' };
+  server.chatRunners.claude.answerDelayMs = 60;
+  server.chatRunners.claude.answers = [Pick('v0')];
+  const view = await server.client.call(autoResolveSkills, {});
+  expect(server.chatRunners.codex.sent).toEqual([]);
+  expect(view.skills.find((skill) => skill.name === 'review-pr')?.fingerprint).toBe('v0');
+});
+test('moves on to the next provider when one never answers', async () => {
+  const server = await enabledWithConflict(['a\nonly one', 'a\nonly two']);
+  server.clis.claude.login = { login: LoginState.signedIn, identity: 'bee@x.dev' };
+  server.clis.codex.login = { login: LoginState.signedIn, identity: 'bee@x.dev' };
+  server.chatRunners.claude.answers = [[{ type: 'error', message: 'exited' }]];
+  server.chatRunners.codex.answerDelayMs = 40;
+  server.chatRunners.codex.answers = [Pick('v1')];
+  const view = await server.client.call(autoResolveSkills, {});
+  expect(view.skills.find((skill) => skill.name === 'review-pr')?.fingerprint).toBe('v1');
+});

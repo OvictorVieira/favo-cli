@@ -200,7 +200,7 @@ export function createServer(gateways: ServerGateways, options: ServerOptions) {
     clock,
     isDangerouslySkippingPermissions
   );
-  const skillJudge = new ChatSkillJudge(chat, providers, fileSystem, `${paths.root}/skills/judge`);
+  const skillJudge = new ChatSkillJudge(chat, providers, fileSystem, `${paths.root}/skills/judge`, clock);
   registerSkillsController(router, skills);
   registerSystemController(router, host);
   registerAccountsController(router, accounts, seats, threads, hooks);

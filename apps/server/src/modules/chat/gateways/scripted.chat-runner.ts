@@ -10,6 +10,7 @@ export class ScriptedChatRunner extends ChatRunner {
   endings = 0;
   answers: ChatEvent[][] = [];
   isSilent = false;
+  answerDelayMs = 0;
   refusalsLeft = 0;
   onStart: ChatEvent[] = [];
 
@@ -32,7 +33,12 @@ export class ScriptedChatRunner extends ChatRunner {
         }
         this.sent.push(text);
         if (!this.isSilent) {
-          for (const event of this.answers.shift() ?? DefaultAnswer) for (const listener of listeners) listener(event);
+          const answer = this.answers.shift() ?? DefaultAnswer;
+          const deliver = () => {
+            for (const event of answer) for (const listener of listeners) listener(event);
+          };
+          if (this.answerDelayMs > 0) setTimeout(deliver, this.answerDelayMs);
+          else deliver();
         }
         return true;
       },
