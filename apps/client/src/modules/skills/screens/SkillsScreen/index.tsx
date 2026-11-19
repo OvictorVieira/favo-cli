@@ -1,4 +1,4 @@
-import { isSkillWorkRunning, SkillDecision } from '@favo/domain/skills/skill';
+import { isSkillWorkRunning, SkillDecision, SkillPhase } from '@favo/domain/skills/skill';
 import type { ScrollBoxRenderable } from '@opentui/core';
 import { useKeyboard, useTerminalDimensions } from '@opentui/react';
 import { useEffect, useRef, useState } from 'react';
@@ -143,7 +143,7 @@ export function SkillsScreen() {
           </scrollbox>
         </>
       )}
-      {!isConfirmingJudge &&
+      {view.phase === SkillPhase.failed &&
         view.problems.slice(0, 3).map((problem) => (
           <text key={problem} fg={colors.danger} wrapMode="none" truncate>
             {problem}

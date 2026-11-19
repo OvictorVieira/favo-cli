@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, test } from 'bun:test';
 import { mockDb } from '@/__tests__/db';
 import { renderApp } from '@/__tests__/utils/renderApp';
+import { useApp } from '@/shared/stores/app';
 
 let dispose: (() => Promise<void>) | undefined;
 
@@ -166,5 +167,22 @@ describe('the skills screen', () => {
     await view.press('i');
     const frame = await view.waitForFrame((next) => next.includes('will be sent to your signed-in AI'));
     expect(frame).not.toContain('skill-3');
+  });
+  test('shows a loading dialog while the skills are read and ignores the comb keys', async () => {
+    const view = await open();
+    useApp.setState({ isSkillsPreparing: true });
+    await view.waitForFrame((frame) => frame.includes('Reading your agent skills'));
+    await view.press('RETURN');
+    expect(mockDb.terminalRuns).toEqual([]);
+    useApp.setState({ isSkillsPreparing: false });
+    await view.waitForFrame((frame) => !frame.includes('Reading your agent skills'));
+  });
+  test('keeps a skill that was too big to share out of the way, since nothing failed', async () => {
+    const view = await open();
+    mockDb.skills.decision = 'enabled' as typeof mockDb.skills.decision;
+    mockDb.skills.problems = ['/home/x/.claude/skills/voice: Skill bundle exceeds 80 MB.'];
+    await view.press('e');
+    await view.waitForFrame((frame) => frame.includes('scan again'));
+    expect(view.captureCharFrame()).not.toContain('exceeds 80 MB');
   });
 });

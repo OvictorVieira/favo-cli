@@ -27,6 +27,7 @@ export type SkillService = {
   keepNewestSkillVersions(): Promise<void>;
   autoResolveSkillVersions(): Promise<void>;
   isSkillsJudging: boolean;
+  isSkillsPreparing: boolean;
 };
 
 const NoSkills: SkillsView = {
@@ -43,10 +44,16 @@ export const createSkillService: ServiceCreator<SkillService> = (set, get) => ({
   isSkillsOpen: false,
   skillChoiceIndex: 0,
   isSkillsJudging: false,
+  isSkillsPreparing: false,
   async offerSkills() {
-    const skillsView = await container.get('ISkillRepository').getSkills();
-    const needsAnswer = skillsView.decision === SkillDecision.pending || skillsView.conflicts.length > 0;
-    set({ skillsView, isSkillsOpen: get().isSkillsOpen || needsAnswer, skillChoiceIndex: 0 });
+    set({ isSkillsPreparing: true });
+    try {
+      const skillsView = await container.get('ISkillRepository').getSkills();
+      const needsAnswer = skillsView.decision === SkillDecision.pending || skillsView.conflicts.length > 0;
+      set({ skillsView, isSkillsOpen: get().isSkillsOpen || needsAnswer, skillChoiceIndex: 0 });
+    } finally {
+      set({ isSkillsPreparing: false });
+    }
   },
   async openSkills() {
     const skillsView = await container.get('ISkillRepository').getSkills();

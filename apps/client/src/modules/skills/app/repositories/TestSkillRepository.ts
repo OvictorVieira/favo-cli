@@ -10,7 +10,7 @@ function view(): SkillsView {
     progress: '',
     skills,
     conflicts: decision === SkillDecision.enabled ? conflicts : [],
-    problems: [],
+    problems: mockDb.skills.problems,
   };
 }
 

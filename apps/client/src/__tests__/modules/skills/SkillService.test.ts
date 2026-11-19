@@ -110,4 +110,24 @@ describe('SkillService', () => {
     expect(app.state.toast?.message).toBe('1 resolved automatically, 1 need you.');
     expect(app.state.isSkillsJudging).toBe(false);
   });
+  test('is preparing while the skills are read and ready afterwards, even if reading fails', async () => {
+    const app = await getApp();
+    const repository = container.get('ISkillRepository');
+    let release: () => void = () => {};
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    container.register('ISkillRepository', {
+      ...repository,
+      getSkills: async () => {
+        await gate;
+        throw new Error('hub went away');
+      },
+    });
+    const offering = app.state.offerSkills();
+    expect(app.state.isSkillsPreparing).toBe(true);
+    release();
+    await expect(offering).rejects.toThrow('hub went away');
+    expect(app.state.isSkillsPreparing).toBe(false);
+  });
 });

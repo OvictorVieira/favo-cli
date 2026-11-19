@@ -16,6 +16,7 @@ import { useCombKeys } from '@/modules/comb/screens/Comb/useCombKeys';
 import { DirectoryPicker } from '@/modules/directories/screens/DirectoryPicker';
 import { AddMachine } from '@/modules/machines/screens/AddMachine';
 import { HandoffDialog } from '@/modules/sessions/screens/HandoffDialog';
+import { SkillsLoading } from '@/modules/skills/screens/SkillsLoading';
 import { SkillsScreen } from '@/modules/skills/screens/SkillsScreen';
 import { ThemePicker } from '@/modules/themes/screens/ThemePicker';
 import { ThreadPicker } from '@/modules/threads/screens/ThreadPicker';
@@ -60,6 +61,7 @@ export function Comb({ onQuit }: { onQuit(): void }) {
   const isAddMachineOpen = useApp((state) => state.isAddMachineOpen);
   const isThemePickerOpen = useApp((state) => state.isThemePickerOpen);
   const isSkillsOpen = useApp((state) => state.isSkillsOpen);
+  const isSkillsPreparing = useApp((state) => state.isSkillsPreparing);
   const offerSkills = useApp((state) => state.offerSkills);
   const isDirectoryPickerOpen = useApp((state) => state.isDirectoryPickerOpen);
   const isThreadPickerOpen = useApp((state) => state.isThreadPickerOpen);
@@ -84,6 +86,7 @@ export function Comb({ onQuit }: { onQuit(): void }) {
     isAddMachineOpen ||
     isThemePickerOpen ||
     isSkillsOpen ||
+    isSkillsPreparing ||
     isDirectoryPickerOpen ||
     isThreadPickerOpen ||
     isUsageOpen;
@@ -254,7 +257,8 @@ export function Comb({ onQuit }: { onQuit(): void }) {
       {isRenameAccountOpen && <RenameAccount />}
       {isAddMachineOpen && <AddMachine />}
       {isThemePickerOpen && <ThemePicker />}
-      {isSkillsOpen && <SkillsScreen />}
+      {isSkillsPreparing && <SkillsLoading />}
+      {isSkillsOpen && !isSkillsPreparing && <SkillsScreen />}
       {isDirectoryPickerOpen && <DirectoryPicker />}
       {isThreadPickerOpen && <ThreadPicker />}
       {!!confirmation && <ConfirmDialog confirmation={confirmation} onClose={() => setConfirmation(undefined)} />}
