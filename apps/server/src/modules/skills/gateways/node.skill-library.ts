@@ -18,7 +18,7 @@ import { basename, dirname, isAbsolute, relative, resolve } from 'node:path';
 import type { ProviderId } from '@favo/domain/providers/provider';
 import { assertDomain, DomainErrorCode } from '@favo/domain/shared/domain-error';
 import { type CatalogSkill, type SkillCandidate, SkillName } from '@favo/domain/skills/skill';
-import { type PublishResult, SkillLibrary } from './skill-library';
+import { type DiscoverResult, type PublishResult, SkillLibrary } from './skill-library';
 
 const AgentHomes: Record<Exclude<ProviderId, 'opencode'>, { marker: string; roots: string[] }> = {
   claude: { marker: '.claude', roots: ['.claude/skills'] },
@@ -58,7 +58,7 @@ export class NodeSkillLibrary extends SkillLibrary {
     this.backups = `${root}/skills/backups`;
   }
 
-  async discover(progress: (message: string) => void) {
+  async discover(progress: (message: string) => void): Promise<DiscoverResult> {
     const candidates: SkillCandidate[] = [];
     const problems: string[] = [];
     const visited = new Set<string>();
@@ -83,8 +83,15 @@ export class NodeSkillLibrary extends SkillLibrary {
         problems.push('Claude plugin manifest could not be read. Personal skills can still be imported.');
       }
     }
+    const synced = await this.syncedByClaude(problems);
     for (const folder of roots) await walk.call(this, folder, 0);
-    return { candidates, problems };
+    const native = candidates.filter((candidate) => this.isNative(candidate, synced));
+    for (const candidate of native) this.bundles.delete(candidate.id);
+    return {
+      candidates: candidates.filter((candidate) => !native.includes(candidate)),
+      problems,
+      native: [...new Set(native.map((candidate) => candidate.name))],
+    };
 
     async function walk(this: NodeSkillLibrary, folder: string, depth: number): Promise<void> {
       try {
@@ -104,13 +111,43 @@ export class NodeSkillLibrary extends SkillLibrary {
           return;
         }
         for (const entry of (await readdir(target)).sort()) {
-          if (!OmittedFolders.has(entry) && !entry.startsWith('.') && !BackupFolder.test(entry))
+          const isSyncedByClaude = `${folder}/${entry}` === this.claudeSynced;
+          if (!OmittedFolders.has(entry) && !entry.startsWith('.') && !BackupFolder.test(entry) && !isSyncedByClaude)
             await walk.call(this, `${folder}/${entry}`, depth + 1);
         }
       } catch (error) {
         problems.push(`${folder}: ${error instanceof Error ? error.message : String(error)}`);
       }
     }
+  }
+
+  private get claudeSynced() {
+    return `${this.home}/.claude/skills/synced`;
+  }
+
+  private async syncedByClaude(problems: string[]) {
+    const names = new Set<string>();
+    const fingerprints = new Set<string>();
+    const groups = await readdir(this.claudeSynced).catch(() => []);
+    for (const group of groups) {
+      for (const name of await readdir(`${this.claudeSynced}/${group}`).catch(() => [])) {
+        const folder = `${this.claudeSynced}/${group}/${name}`;
+        if (!(await stat(`${folder}/SKILL.md`).catch(() => undefined))) continue;
+        try {
+          names.add(name);
+          fingerprints.add((await this.bundle(folder)).candidate.fingerprint);
+        } catch (error) {
+          problems.push(`${folder}: ${error instanceof Error ? error.message : String(error)}`);
+        }
+      }
+    }
+    return { names, fingerprints };
+  }
+
+  private isNative(candidate: SkillCandidate, synced: { names: Set<string>; fingerprints: Set<string> }) {
+    const isClaudeCopy =
+      dirname(candidate.source) === `${this.home}/.claude/skills` && synced.names.has(basename(candidate.source));
+    return isClaudeCopy || synced.fingerprints.has(candidate.fingerprint);
   }
 
   async adopt(candidate: SkillCandidate) {

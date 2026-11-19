@@ -270,3 +270,26 @@ test('records where every replaced copy came from, and reports what it is linkin
     .map((line) => JSON.parse(line));
   expect(manifest.map((entry) => entry.from)).toContain(`${home}/.claude/skills/review-pr`);
 });
+
+test('leaves out the skills Claude ships and syncs itself, but keeps a copy the user changed', async () => {
+  await mkdir(`${home}/.claude/skills/synced/abc`, { recursive: true });
+  await writeSkill('.claude/skills/synced/abc', 'pdf', 'official pdf');
+  await writeSkill('.claude/skills/synced/abc', 'skill-creator', 'official creator');
+  await writeSkill('.claude/skills', 'pdf', 'an older copy of the official pdf skill');
+  await writeSkill('.cursor/skills', 'skill-creator', 'official creator');
+  await writeSkill('.cursor/skills', 'skill-creator-mine', 'my own');
+  await mkdir(`${home}/.cursor/skills/review-pr`, { recursive: true });
+  await writeFile(`${home}/.cursor/skills/review-pr/SKILL.md`, '---\nname: review-pr\ndescription: mine\n---\nmine\n');
+  const { candidates, native } = await library.discover(() => {});
+  expect(candidates.map((item) => item.name).toSorted()).toEqual(['review-pr', 'skill-creator-mine']);
+  expect(native.toSorted()).toEqual(['pdf', 'skill-creator']);
+  expect(candidates.some((item) => item.source.includes('/synced/'))).toBe(false);
+});
+
+test('keeps a user skill that only shares its name with one Claude ships', async () => {
+  await mkdir(`${home}/.claude/skills/synced/abc`, { recursive: true });
+  await writeSkill('.claude/skills/synced/abc', 'skill-creator', 'official creator');
+  await writeSkill('.cursor/skills', 'skill-creator', 'my own, very different version');
+  const { candidates } = await library.discover(() => {});
+  expect(candidates.map((item) => item.source)).toEqual([`${home}/.cursor/skills/skill-creator`]);
+});

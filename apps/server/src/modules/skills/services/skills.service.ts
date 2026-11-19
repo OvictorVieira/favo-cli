@@ -179,7 +179,17 @@ export class SkillsService {
     });
     this.candidates = scan.candidates;
     this.hasScanned = true;
+    await this.forgetNative(scan.native);
     this.scanProblems = scan.problems;
+  }
+
+  private async forgetNative(native: string[]) {
+    const state = await this.state.read();
+    const stale = state.skills.filter(
+      (skill) => native.includes(skill.name) && !this.candidates.some((candidate) => candidate.name === skill.name)
+    );
+    if (stale.length === 0) return;
+    await this.state.save({ ...state, skills: state.skills.filter((skill) => !stale.includes(skill)) });
   }
 
   private async run() {

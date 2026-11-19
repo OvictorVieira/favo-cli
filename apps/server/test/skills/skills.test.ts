@@ -258,3 +258,23 @@ test('moves on to the next provider when one never answers', async () => {
   const view = await server.client.call(autoResolveSkills, {});
   expect(view.skills.find((skill) => skill.name === 'review-pr')?.fingerprint).toBe('v1');
 });
+
+test('forgets a skill that turns out to be one the provider ships itself', async () => {
+  const server = createTestServer();
+  server.skillLibrary.candidates = [candidate('pdf', 'pdf'), candidate('debug')];
+  await server.client.call(importSkills, {});
+  expect((await settled(server)).skills.map((skill) => skill.name).toSorted()).toEqual(['debug-root-cause', 'pdf']);
+  server.skillLibrary.candidates = [candidate('debug')];
+  server.skillLibrary.native = ['pdf'];
+  await server.client.call(provisionSeat, { account: 'personal', provider: 'claude' });
+  expect((await server.client.call(getSkills, {})).skills.map((skill) => skill.name)).toEqual(['debug-root-cause']);
+});
+test('keeps a skill whose name matches a native one when a copy of the user is still around', async () => {
+  const server = createTestServer();
+  server.skillLibrary.candidates = [candidate('mine', 'skill-creator')];
+  await server.client.call(importSkills, {});
+  await settled(server);
+  server.skillLibrary.native = ['skill-creator'];
+  await server.client.call(provisionSeat, { account: 'personal', provider: 'claude' });
+  expect((await server.client.call(getSkills, {})).skills.map((skill) => skill.name)).toEqual(['skill-creator']);
+});

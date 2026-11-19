@@ -4,6 +4,7 @@ import { SkillLibrary } from './skill-library';
 export class MemorySkillLibrary extends SkillLibrary {
   candidates: SkillCandidate[] = [];
   problems: string[] = [];
+  native: string[] = [];
   adopted: string[] = [];
   published: CatalogSkill[] = [];
   publishProblems: string[] = [];
@@ -12,7 +13,7 @@ export class MemorySkillLibrary extends SkillLibrary {
   async discover(progress: (message: string) => void) {
     this.scans++;
     progress('Scanning local skills');
-    return { candidates: this.candidates, problems: this.problems };
+    return { candidates: this.candidates, problems: this.problems, native: this.native };
   }
   async adopt(candidate: SkillCandidate) {
     this.adopted.push(candidate.id);
