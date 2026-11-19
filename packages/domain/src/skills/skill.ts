@@ -49,6 +49,7 @@ export const SkillsView = z.object({
   skills: z.array(CatalogSkill),
   conflicts: z.array(SkillConflict),
   problems: z.array(z.string()),
+  notices: z.array(z.string()).optional(),
 });
 export type SkillsView = z.infer<typeof SkillsView>;
 

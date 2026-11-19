@@ -24,16 +24,16 @@ export function SkillsScreen() {
   const chooseSkillVersion = useApp((state) => state.chooseSkillVersion);
   const keepNewestSkillVersions = useApp((state) => state.keepNewestSkillVersions);
   const autoResolveSkillVersions = useApp((state) => state.autoResolveSkillVersions);
-  const isJudging = useApp((state) => state.isSkillsJudging);
+  const isBusy = useApp((state) => state.isSkillsBusy);
   const [isConfirmingJudge, setIsConfirmingJudge] = useState(false);
   const scrollRef = useRef<ScrollBoxRenderable>(null);
   const error = useError();
-  const isRunning = isSkillWorkRunning(view.phase) || isJudging;
+  const isRunning = isSkillWorkRunning(view.phase) || isBusy;
   const isChoosing = view.conflicts.length > 0;
   const isEnabled = view.decision === SkillDecision.enabled;
   const canStart = !isRunning && !isChoosing && !isEnabled;
   const canScanAgain = !isRunning && !isChoosing && isEnabled;
-  const showsChoices = isChoosing && !isConfirmingJudge && !isJudging;
+  const showsChoices = isChoosing && !isConfirmingJudge && !isBusy;
   const isFirstOffer = view.decision === SkillDecision.pending;
   const choices = skillChoices(view);
   const listHeight = Math.max(height - DialogChrome, MinimumListHeight);
@@ -81,11 +81,7 @@ export function SkillsScreen() {
           </text>
         </>
       )}
-      {isRunning && (
-        <text fg={colors.accentBright}>
-          {isJudging ? `Your signed-in AI is comparing the versions… ${view.progress}` : view.progress}
-        </text>
-      )}
+      {isRunning && <text fg={colors.accentBright}>{view.progress || 'Working…'}</text>}
       {isConfirmingJudge && (
         <text fg={colors.text} marginTop={1}>
           The differing versions will be sent to your signed-in AI (Claude first, then Codex and others), which only
@@ -149,6 +145,11 @@ export function SkillsScreen() {
             {problem}
           </text>
         ))}
+      {!isBusy && !isConfirmingJudge && (view.notices ?? []).length > 0 && (
+        <text fg={colors.faint} marginTop={1} wrapMode="none" truncate>
+          {(view.notices ?? []).length} left as they are: linked to your own folders.
+        </text>
+      )}
       <box flexDirection="row" marginTop={1}>
         {isConfirmingJudge && <KeyHint keys="enter" label="send to my AI" onPress={confirmJudge} />}
         {isConfirmingJudge && <KeyHint keys="esc" label="cancel" onPress={() => setIsConfirmingJudge(false)} />}

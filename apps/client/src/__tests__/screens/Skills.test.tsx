@@ -185,4 +185,11 @@ describe('the skills screen', () => {
     await view.waitForFrame((frame) => frame.includes('scan again'));
     expect(view.captureCharFrame()).not.toContain('exceeds 80 MB');
   });
+  test('says how many skills were left as they are because they are linked to your own folders', async () => {
+    const view = await open();
+    mockDb.skills.decision = 'enabled' as typeof mockDb.skills.decision;
+    mockDb.skills.notices = ['review-pr: ~/.claude/skills/review-pr is linked to ~/repo, so it was left as it is'];
+    await view.press('e');
+    await view.waitForFrame((frame) => frame.includes('1 left as they are: linked to your own folders'));
+  });
 });

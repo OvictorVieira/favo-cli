@@ -384,6 +384,7 @@ function printSkills(context: CommandContext, view: SkillsView, isJson: boolean)
       print(`  favo skills use ${conflict.name} ${candidate.id}  ${paint.dim(candidate.source)}`);
     }
   }
+  for (const notice of view.notices ?? []) print(paint.dim(`  left as it is: ${notice}`));
   for (const problem of view.problems) print(`! ${problem}`);
   return needsAttention(view) ? 1 : 0;
 }

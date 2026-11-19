@@ -1,5 +1,17 @@
 import { afterEach, beforeEach, expect, test } from 'bun:test';
-import { chmod, lstat, mkdir, mkdtemp, readdir, readFile, realpath, rm, writeFile } from 'node:fs/promises';
+import {
+  chmod,
+  lstat,
+  mkdir,
+  mkdtemp,
+  readdir,
+  readFile,
+  realpath,
+  rename,
+  rm,
+  symlink,
+  writeFile,
+} from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { NodeSkillLibrary } from '@/modules/skills/gateways/node.skill-library';
 
@@ -38,7 +50,7 @@ test('publishes the catalog to every installed agent, keeping bundled files and 
   const { candidates } = await library.discover(() => {});
   const [candidate] = candidates;
   await library.adopt(candidate!);
-  const problems = await library.publish([
+  const { problems } = await library.publish([
     {
       name: 'debug-root-cause',
       description: 'Does debug-root-cause',
@@ -63,7 +75,7 @@ test('publishes the catalog to every installed agent, keeping bundled files and 
   expect(await realpath(`${home}/.claude/skills/debug-root-cause`)).toBe(
     await realpath(`${home}/.cursor/skills/debug-root-cause`)
   );
-  expect((await readdir(`${home}/.favo/skills/backups`)).length).toBe(1);
+  expect((await readdir(`${home}/.favo/skills/backups`)).filter((name) => name !== 'manifest.jsonl')).toHaveLength(1);
 });
 
 test('does not create skill folders for agents that are not installed', async () => {
@@ -92,7 +104,7 @@ test('leaves an install untouched when it cannot be replaced', async () => {
   await rm(`${home}/.claude/skills/debug-root-cause`, { recursive: true });
   await writeSkill('.claude/skills', 'debug-root-cause', 'find the cause');
   await chmod(`${home}/.claude/skills`, 0o500);
-  const problems = await library.publish([
+  const { problems } = await library.publish([
     {
       name: 'debug-root-cause',
       description: 'x',
@@ -120,7 +132,7 @@ test('refuses to replace a copy nobody reviewed', async () => {
   const { candidates } = await library.discover(() => {});
   await library.adopt(candidates[0]!);
   await writeSkill('.agents/skills', 'debug-root-cause', 'my own different edit');
-  const problems = await library.publish([
+  const { problems } = await library.publish([
     {
       name: 'debug-root-cause',
       description: 'x',
@@ -187,4 +199,74 @@ test('reads a skill whose frontmatter is not valid YAML', async () => {
   const { candidates, problems } = await library.discover(() => {});
   expect(problems).toEqual([]);
   expect(candidates[0]).toMatchObject({ name: 'loose', description: 'Use when: the user says "go": do it' });
+});
+
+test("leaves an install alone when it is a link into the user's own skills repository", async () => {
+  await writeSkill('.claude/skills', 'review-pr', 'current');
+  await mkdir(`${home}/repo/skills`, { recursive: true });
+  await rename(`${home}/.claude/skills/review-pr`, `${home}/repo/skills/review-pr`);
+  await symlink(`${home}/repo/skills/review-pr`, `${home}/.claude/skills/review-pr`);
+  const { candidates } = await library.discover(() => {});
+  await library.adopt(candidates[0]!);
+  const { problems, leftAlone } = await library.publish([
+    {
+      name: 'review-pr',
+      description: 'x',
+      source: candidates[0]!.source,
+      fingerprint: candidates[0]!.fingerprint,
+      rejected: [],
+      warnings: [],
+    },
+  ]);
+  expect(problems).toEqual([]);
+  expect(leftAlone.join()).toContain('review-pr');
+  expect(leftAlone.join()).toContain('so it was left as it is');
+  expect(await realpath(`${home}/.claude/skills/review-pr`)).toBe(await realpath(`${home}/repo/skills/review-pr`));
+});
+
+test('leaves a folder with no SKILL.md alone and says so, instead of failing', async () => {
+  await writeSkill('.claude/skills', 'review-pr', 'current');
+  await mkdir(`${home}/.codex/skills/review-pr/vendor`, { recursive: true });
+  const { candidates } = await library.discover(() => {});
+  await library.adopt(candidates[0]!);
+  const { problems, leftAlone } = await library.publish([
+    {
+      name: 'review-pr',
+      description: 'x',
+      source: candidates[0]!.source,
+      fingerprint: candidates[0]!.fingerprint,
+      rejected: [],
+      warnings: [],
+    },
+  ]);
+  expect(problems).toEqual([]);
+  expect(leftAlone.join()).toContain('has no SKILL.md');
+  expect((await lstat(`${home}/.codex/skills/review-pr/vendor`)).isDirectory()).toBe(true);
+});
+
+test('records where every replaced copy came from, and reports what it is linking', async () => {
+  await writeSkill('.claude/skills', 'review-pr', 'current');
+  await mkdir(`${home}/.codex`, { recursive: true });
+  const { candidates } = await library.discover(() => {});
+  await library.adopt(candidates[0]!);
+  const messages: string[] = [];
+  await library.publish(
+    [
+      {
+        name: 'review-pr',
+        description: 'x',
+        source: candidates[0]!.source,
+        fingerprint: candidates[0]!.fingerprint,
+        rejected: [],
+        warnings: [],
+      },
+    ],
+    (message) => messages.push(message)
+  );
+  expect(messages.some((message) => message.includes('(1/1)'))).toBe(true);
+  const manifest = (await readFile(`${home}/.favo/skills/backups/manifest.jsonl`, 'utf8'))
+    .trim()
+    .split('\n')
+    .map((line) => JSON.parse(line));
+  expect(manifest.map((entry) => entry.from)).toContain(`${home}/.claude/skills/review-pr`);
 });

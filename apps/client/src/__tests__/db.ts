@@ -344,6 +344,7 @@ function seedSkills() {
     importable,
     imports: 0,
     problems: [] as string[],
+    notices: [] as string[],
     autoPicks: {} as Record<string, string>,
     chosen: [] as { name: string; candidateId: string }[],
   };

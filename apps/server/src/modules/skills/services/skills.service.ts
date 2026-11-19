@@ -1,5 +1,6 @@
 import { assertDomain, DomainErrorCode } from '@favo/domain/shared/domain-error';
 import {
+  type CatalogSkill,
   isCatalogCandidate,
   type SkillCandidate,
   SkillDecision,
@@ -23,6 +24,7 @@ export class SkillsService {
   private hasScanned = false;
   private scanProblems: string[] = [];
   private publishProblems: string[] = [];
+  private notices: string[] = [];
   private work?: Promise<void>;
   constructor(
     private readonly state: SkillStateRepository,
@@ -38,6 +40,7 @@ export class SkillsService {
       phase: this.phase,
       progress: this.progress,
       problems: [...this.scanProblems, ...this.publishProblems],
+      notices: this.notices,
       conflicts: unresolvedConflicts(this.candidates, state.skills),
     };
   }
@@ -158,7 +161,7 @@ export class SkillsService {
         this.progress = ConflictsNotice;
         return;
       }
-      this.publishProblems = await this.library.publish(state.skills);
+      await this.publish(state.skills);
       this.phase = this.publishProblems.length > 0 ? SkillPhase.failed : SkillPhase.done;
     } catch (error) {
       this.publishProblems = [error instanceof Error ? error.message : String(error)];
@@ -206,6 +209,14 @@ export class SkillsService {
     }
   }
 
+  private async publish(skills: CatalogSkill[]) {
+    const { problems, leftAlone } = await this.library.publish(skills, (message) => {
+      this.progress = message;
+    });
+    this.publishProblems = problems;
+    this.notices = leftAlone;
+  }
+
   private async finish() {
     const state = await this.state.read();
     if (unresolvedConflicts(this.candidates, state.skills).length > 0) {
@@ -215,7 +226,7 @@ export class SkillsService {
     }
     this.phase = SkillPhase.syncing;
     this.progress = 'Publishing the shared catalog to local providers';
-    this.publishProblems = await this.library.publish(state.skills);
+    await this.publish(state.skills);
     this.phase = this.publishProblems.length > 0 ? SkillPhase.failed : SkillPhase.done;
     this.progress = `${state.skills.length} skills in the Favo catalog`;
   }

@@ -11,6 +11,7 @@ function view(): SkillsView {
     skills,
     conflicts: decision === SkillDecision.enabled ? conflicts : [],
     problems: mockDb.skills.problems,
+    notices: mockDb.skills.notices,
   };
 }
 

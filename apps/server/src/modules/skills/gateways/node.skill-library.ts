@@ -1,5 +1,6 @@
 import { createHash, randomUUID } from 'node:crypto';
 import {
+  appendFile,
   chmod,
   cp,
   lstat,
@@ -17,7 +18,7 @@ import { basename, dirname, isAbsolute, relative, resolve } from 'node:path';
 import type { ProviderId } from '@favo/domain/providers/provider';
 import { assertDomain, DomainErrorCode } from '@favo/domain/shared/domain-error';
 import { type CatalogSkill, type SkillCandidate, SkillName } from '@favo/domain/skills/skill';
-import { SkillLibrary } from './skill-library';
+import { type PublishResult, SkillLibrary } from './skill-library';
 
 const AgentHomes: Record<Exclude<ProviderId, 'opencode'>, { marker: string; roots: string[] }> = {
   claude: { marker: '.claude', roots: ['.claude/skills'] },
@@ -143,18 +144,21 @@ export class NodeSkillLibrary extends SkillLibrary {
     }
   }
 
-  async publish(skills: CatalogSkill[]) {
+  async publish(skills: CatalogSkill[], progress: (message: string) => void = () => {}): Promise<PublishResult> {
     const problems: string[] = [];
+    const leftAlone: string[] = [];
     for (const root of await this.installedRoots()) {
-      for (const skill of skills) {
+      for (const [index, skill] of skills.entries()) {
+        progress(`Linking skills into ${root.replace(this.home, '~')} (${index + 1}/${skills.length})`);
         try {
-          await this.link(root, skill);
+          const reason = await this.link(root, skill);
+          if (reason) leftAlone.push(`${skill.name}: ${reason}`);
         } catch (error) {
           problems.push(`${skill.name}: ${error instanceof Error ? error.message : String(error)}`);
         }
       }
     }
-    return problems;
+    return { problems, leftAlone };
   }
 
   private agents() {
@@ -180,7 +184,7 @@ export class NodeSkillLibrary extends SkillLibrary {
     return [...new Set(installed)];
   }
 
-  private async link(root: string, skill: CatalogSkill) {
+  private async link(root: string, skill: CatalogSkill): Promise<string | undefined> {
     const source = `${this.catalog}/${skill.name}`;
     assertDomain(
       await stat(`${source}/SKILL.md`).catch(() => undefined),
@@ -188,9 +192,19 @@ export class NodeSkillLibrary extends SkillLibrary {
       `Catalog skill missing: ${skill.name}`
     );
     const destination = `${root}/${skill.name}`;
-    if ((await realpath(destination).catch(() => undefined)) === (await realpath(source))) return;
+    if ((await realpath(destination).catch(() => undefined)) === (await realpath(source))) return undefined;
     const approved = [skill.fingerprint, ...skill.rejected];
-    if (await lstat(destination).catch(() => undefined)) {
+    const existing = await lstat(destination).catch(() => undefined);
+    if (existing?.isSymbolicLink()) {
+      const target = await realpath(destination).catch(() => undefined);
+      if (!target || !isWithin(this.catalog, target)) {
+        return `${destination.replace(this.home, '~')} is linked to ${(target ?? 'a missing folder').replace(this.home, '~')}, so it was left as it is`;
+      }
+    }
+    if (existing && !(await stat(`${destination}/SKILL.md`).catch(() => undefined))) {
+      return `${destination.replace(this.home, '~')} has no SKILL.md, so it was left as it is`;
+    }
+    if (existing) {
       const current = await this.bundle(destination);
       assertDomain(
         current.candidate.name === skill.name && approved.includes(current.candidate.fingerprint),
@@ -202,6 +216,7 @@ export class NodeSkillLibrary extends SkillLibrary {
     await mkdir(root, { recursive: true });
     await this.replace(destination, source);
     for (const stray of strays) await this.backup(stray);
+    return undefined;
   }
 
   private async strayCopies(root: string, destination: string, name: string, approved: string[]) {
@@ -239,6 +254,10 @@ export class NodeSkillLibrary extends SkillLibrary {
     await mkdir(this.backups, { recursive: true, mode: 0o700 });
     const kept = `${this.backups}/${randomUUID()}-${basename(path)}`;
     await this.move(path, kept);
+    await appendFile(
+      `${this.backups}/manifest.jsonl`,
+      `${JSON.stringify({ at: new Date().toISOString(), from: path, kept })}\n`
+    );
     return kept;
   }
 

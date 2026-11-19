@@ -108,7 +108,7 @@ describe('SkillService', () => {
     expect(mockDb.skills.chosen).toEqual([{ name: 'review-pr', candidateId: 'review-pr-b' }]);
     expect(app.state.skillsView.conflicts.map((conflict) => conflict.name)).toEqual(['ralph']);
     expect(app.state.toast?.message).toBe('1 resolved automatically, 1 need you.');
-    expect(app.state.isSkillsJudging).toBe(false);
+    expect(app.state.isSkillsBusy).toBe(false);
   });
   test('is preparing while the skills are read and ready afterwards, even if reading fails', async () => {
     const app = await getApp();
@@ -129,5 +129,43 @@ describe('SkillService', () => {
     release();
     await expect(offering).rejects.toThrow('hub went away');
     expect(app.state.isSkillsPreparing).toBe(false);
+  });
+  test('follows the progress while the last choice is being linked', async () => {
+    const app = await getApp();
+    mockDb.skills.decision = 'enabled';
+    mockDb.skills.conflicts = [
+      {
+        name: 'wrap-up',
+        candidates: [
+          { id: 'a', name: 'wrap-up', description: 'x', source: '/a', fingerprint: 'a', preview: 'a', warnings: [] },
+          { id: 'b', name: 'wrap-up', description: 'x', source: '/b', fingerprint: 'b', preview: 'b', warnings: [] },
+        ],
+      },
+    ];
+    await app.state.openSkills();
+    const repository = container.get('ISkillRepository');
+    let release: () => void = () => {};
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    container.register('ISkillRepository', {
+      ...repository,
+      resolveSkill: async (name: string, id: string) => {
+        await gate;
+        return repository.resolveSkill(name, id);
+      },
+      getSkills: async () => ({
+        ...(await repository.getSkills()),
+        phase: 'syncing' as const,
+        progress: 'Linking skills into ~/.claude/skills (3/135)',
+      }),
+    });
+    const choosing = app.state.chooseSkillVersion();
+    expect(app.state.isSkillsBusy).toBe(true);
+    await Bun.sleep(900);
+    expect(app.state.skillsView.progress).toBe('Linking skills into ~/.claude/skills (3/135)');
+    release();
+    await choosing;
+    expect(app.state.isSkillsBusy).toBe(false);
   });
 });
