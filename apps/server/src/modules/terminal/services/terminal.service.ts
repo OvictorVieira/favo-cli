@@ -109,6 +109,7 @@ export class TerminalService {
         ...env,
         ...launch.env,
         ...threadEnvironment({ account, launchId, binary: this.binary }),
+        FAVO_PROVIDER: provider,
       },
       unsetEnv: launch.unsetEnv,
       afterExit: herdrReleaseStep(this.callerEnv, account, provider),

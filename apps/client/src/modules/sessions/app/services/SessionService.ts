@@ -3,7 +3,7 @@ import { DesktopLogin, DesktopOpening } from '@favo/domain/desktop/desktop-app';
 import { isOlderFavoError } from '@favo/domain/machines/machine';
 import { Providers } from '@favo/domain/providers/provider';
 import { ownValue } from '@favo/domain/shared/own-value';
-import { TerminalAction } from '@favo/domain/terminal/terminal-plan';
+import { TerminalAction, type TerminalRunResult } from '@favo/domain/terminal/terminal-plan';
 import { handoffPromptOf } from '@favo/domain/threads/handoff-prompt';
 import { compute } from '@/libs/zustand';
 import type { Seat } from '@/modules/comb/app/entities/Seat';
@@ -17,7 +17,8 @@ const AppLoginPolls = 60;
 export type AppLoginWatch = { seatKey: string };
 
 export type SessionService = {
-  pendingHandoff?: { source: Seat; directory?: string; transcript?: string };
+  sessionTransition?: { label: string };
+  pendingHandoff?: { source: Seat; directory?: string; transcript?: string; sessionId?: string; launchId?: string };
   desktopApps: Record<string, DesktopAppView[]>;
   selectedDesktopApp?: DesktopAppView;
   canOpenDesktopApp: boolean;
@@ -47,6 +48,7 @@ export const createSessionService: ServiceCreator<SessionService> = (set, get) =
   isDesktopAppBusy: false,
   appLoginWatch: undefined,
   pendingHandoff: undefined,
+  sessionTransition: undefined,
   async loadDesktopApps(machineId) {
     const previousApps = ownValue(get().desktopApps, machineId) ?? [];
     const desktopApps = await _appsOn(machineId);
@@ -102,76 +104,129 @@ export const createSessionService: ServiceCreator<SessionService> = (set, get) =
     else await signInSelectedSeat();
   },
   async launchSelectedSeat() {
-    const { selectedSeat, launchDirectories, refreshSeat, loadSelectedThreads } = get();
-    if (!selectedSeat) return;
+    const { selectedSeat, launchDirectories, refreshSeat, loadSelectedThreads, sessionTransition } = get();
+    if (!selectedSeat || sessionTransition) return;
+    const transition = { label: selectedSeat.label };
     const directory = ownValue(launchDirectories, selectedSeat.machineId);
-    const result = await _runInTerminal(
-      selectedSeat,
-      TerminalAction.launch,
-      refreshSeat,
-      directory,
-      undefined,
-      [],
-      true
-    );
-    await loadSelectedThreads();
-    if (result.rateLimitDetected)
-      set({ pendingHandoff: _handoffOf(selectedSeat, directory, get().selectedThreads[0]) });
+    let offeredHandoff: SessionService['pendingHandoff'];
+    try {
+      set({ sessionTransition: transition });
+      const result = await _runInTerminal(
+        selectedSeat,
+        TerminalAction.launch,
+        refreshSeat,
+        directory,
+        undefined,
+        [],
+        true,
+        (result) => {
+          offeredHandoff = result.rateLimitDetected
+            ? _handoffOf(selectedSeat, directory, undefined, result.launchId)
+            : undefined;
+          set({ sessionTransition: undefined, pendingHandoff: offeredHandoff });
+        }
+      );
+      if (result.rateLimitDetected) {
+        const thread = await _latestThreadOf(selectedSeat, directory, result.launchId);
+        if (get().pendingHandoff === offeredHandoff)
+          set({ pendingHandoff: _handoffOf(selectedSeat, directory, thread) });
+      }
+      await loadSelectedThreads();
+    } finally {
+      if (get().sessionTransition === transition) set({ sessionTransition: undefined });
+    }
   },
   async resumeSeatThread(seat, thread) {
-    const { refreshSeat, loadSelectedThreads } = get();
-    const result = await _runInTerminal(
-      seat,
-      TerminalAction.resume,
-      refreshSeat,
-      thread.directory,
-      thread.id,
-      [],
-      true
-    );
-    await loadSelectedThreads();
-    if (result.rateLimitDetected) set({ pendingHandoff: _handoffOf(seat, thread.directory, thread) });
+    const { refreshSeat, loadSelectedThreads, sessionTransition } = get();
+    if (sessionTransition) return;
+    const transition = { label: seat.label };
+    try {
+      set({ sessionTransition: transition });
+      await _runInTerminal(seat, TerminalAction.resume, refreshSeat, thread.directory, thread.id, [], true, (result) =>
+        set({
+          sessionTransition: undefined,
+          pendingHandoff: result.rateLimitDetected ? _handoffOf(seat, thread.directory, thread) : undefined,
+        })
+      );
+      await loadSelectedThreads();
+    } finally {
+      if (get().sessionTransition === transition) set({ sessionTransition: undefined });
+    }
   },
   closeHandoff() {
     set({ pendingHandoff: undefined });
   },
   async continueHandoff(seat) {
-    const pendingHandoff = get().pendingHandoff;
-    if (!pendingHandoff) return;
-    const prompt = handoffPromptOf({
-      sourceProvider: pendingHandoff.source.provider,
-      transcript: pendingHandoff.transcript,
-      directory: pendingHandoff.directory,
-    });
-    const args = [...Providers[seat.provider].initialPromptArguments, prompt];
-    set({ pendingHandoff: undefined });
-    let result: Awaited<ReturnType<typeof _runInTerminal>>;
+    const { pendingHandoff, sessionTransition } = get();
+    if (!pendingHandoff || sessionTransition) return;
+    const transition = { label: seat.label };
+    let offeredHandoff: SessionService['pendingHandoff'];
     try {
-      result = await _runInTerminal(
+      set({ pendingHandoff: undefined, sessionTransition: transition });
+      const thread = pendingHandoff.sessionId
+        ? undefined
+        : await _latestThreadOf(pendingHandoff.source, pendingHandoff.directory, pendingHandoff.launchId);
+      const context = thread ? _handoffOf(pendingHandoff.source, pendingHandoff.directory, thread) : pendingHandoff;
+      const prompt = handoffPromptOf({
+        sourceProvider: context.source.provider,
+        sourceHome: context.source.path,
+        sessionId: context.sessionId,
+        transcript: context.transcript,
+        directory: context.directory,
+      });
+      const args = [...Providers[seat.provider].initialPromptArguments, prompt];
+      const result = await _runInTerminal(
         seat,
         TerminalAction.launch,
         get().refreshSeat,
         pendingHandoff.directory,
         undefined,
         args,
-        true
+        true,
+        (result) => {
+          offeredHandoff = result.rateLimitDetected
+            ? _handoffOf(seat, pendingHandoff.directory, undefined, result.launchId)
+            : undefined;
+          set({ sessionTransition: undefined, pendingHandoff: offeredHandoff });
+        }
       );
+      if (result.rateLimitDetected) {
+        const thread = await _latestThreadOf(seat, pendingHandoff.directory, result.launchId);
+        if (get().pendingHandoff === offeredHandoff)
+          set({ pendingHandoff: _handoffOf(seat, pendingHandoff.directory, thread) });
+      }
     } catch (error) {
       set({ pendingHandoff });
       throw error;
-    }
-    if (result.rateLimitDetected) {
-      const thread = await _latestThreadOf(seat, pendingHandoff.directory);
-      set({ pendingHandoff: _handoffOf(seat, pendingHandoff.directory, thread) });
+    } finally {
+      if (get().sessionTransition === transition) set({ sessionTransition: undefined });
     }
   },
   async signInSelectedSeat() {
-    const { selectedSeat } = get();
-    if (selectedSeat) await _runInTerminal(selectedSeat, TerminalAction.login, get().refreshSeat);
+    const { selectedSeat, sessionTransition, refreshSeat } = get();
+    if (!selectedSeat || sessionTransition) return;
+    const transition = { label: selectedSeat.label };
+    try {
+      set({ sessionTransition: transition });
+      await _runInTerminal(selectedSeat, TerminalAction.login, refreshSeat, undefined, undefined, [], false, () =>
+        set({ sessionTransition: undefined })
+      );
+    } finally {
+      if (get().sessionTransition === transition) set({ sessionTransition: undefined });
+    }
   },
   async signOutSelectedSeat() {
-    const { selectedSeat } = get();
-    if (selectedSeat) await _runInTerminal(selectedSeat, TerminalAction.logout, get().refreshSeat);
+    const { selectedSeat, sessionTransition, refreshSeat } = get();
+    if (!selectedSeat || sessionTransition) return;
+    const transition = { label: selectedSeat.label };
+    try {
+      set({ sessionTransition: transition });
+      await _runInTerminal(selectedSeat, TerminalAction.logout, refreshSeat, undefined, undefined, [], false, () =>
+        set({ sessionTransition: undefined })
+      );
+    } finally {
+      if (get().sessionTransition === transition) set({ sessionTransition: undefined });
+    }
   },
   async copySelectedPath() {
     const { selectedSeat, updateSeat, showToast } = get();
@@ -241,24 +296,44 @@ async function _runInTerminal(
   directory?: string,
   thread?: string,
   args: string[] = [],
-  monitorLimits = false
+  monitorLimits = false,
+  onReturn?: (result: TerminalRunResult & { launchId?: string }) => void
 ) {
   const terminalRepository = container.get('ITerminalRepository');
   const terminalGateway = container.get('ITerminalGateway');
   const plan = await terminalRepository.plan(seat, action, directory, thread, args);
-  const result = await terminalGateway.run(plan, monitorLimits ? { monitorLimits: seat.provider } : undefined);
-  await refreshSeat(seat);
-  return result;
+  let hasReturned = false;
+  const beforeResume = (result: TerminalRunResult) => {
+    if (hasReturned) return;
+    hasReturned = true;
+    onReturn?.({ ...result, launchId: plan.env.FAVO_LAUNCH });
+  };
+  const result = await terminalGateway.run(plan, {
+    ...(monitorLimits ? { monitorLimits: seat.provider } : {}),
+    beforeResume,
+  });
+  beforeResume(result);
+  await refreshSeat(seat).catch((error: unknown) => {
+    if (!result.rateLimitDetected) throw error;
+  });
+  return { ...result, launchId: plan.env.FAVO_LAUNCH };
 }
 
-function _handoffOf(source: Seat, directory: string | undefined, thread: ThreadView | undefined) {
-  return { source, directory: thread?.directory ?? directory, transcript: thread?.transcript };
+function _handoffOf(source: Seat, directory: string | undefined, thread: ThreadView | undefined, launchId?: string) {
+  return {
+    source,
+    directory: thread?.directory ?? directory,
+    transcript: thread?.transcript,
+    sessionId: thread?.id,
+    launchId: launchId ?? thread?.launchId,
+  };
 }
 
-async function _latestThreadOf(seat: Seat, directory?: string) {
+async function _latestThreadOf(seat: Seat, directory?: string, launchId?: string) {
   const threadRepository = container.get('IThreadRepository');
   try {
-    return (await threadRepository.getThreads(seat, directory))[0];
+    const threads = await threadRepository.getThreads(seat, directory);
+    return launchId ? threads.find((thread) => thread.launchId === launchId) : threads[0];
   } catch {
     return undefined;
   }

@@ -322,6 +322,21 @@ describe('a thread that carries its transcript', () => {
   });
 });
 
+describe('launch IDs in thread replies', () => {
+  it('reads both legacy and launch-correlated sessions', () => {
+    const thread = {
+      id: 'session',
+      directory: '/project',
+      updatedAt: '2026-11-18T00:00:00Z',
+      isGuess: false,
+      isDirectoryGone: false,
+    };
+    expect(listThreads.result.safeParse([{ ...thread, launchId: 'launch' }]).success).toBe(true);
+    expect(listThreads.result.safeParse([thread]).success).toBe(true);
+    expect(Protocol).toBeGreaterThanOrEqual(8);
+  });
+});
+
 describe('the protocol', () => {
   it('is at least 5, the first one whose machines read --argv-b64', () => {
     expect(Protocol).toBeGreaterThanOrEqual(5);

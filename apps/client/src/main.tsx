@@ -1,7 +1,7 @@
 import type { RpcTransport } from '@favo/contracts/rpc/envelope';
 import type { TerminalPlan, TerminalRunOptions, TerminalRunResult } from '@favo/domain/terminal/terminal-plan';
 import { createCliRenderer } from '@opentui/core';
-import { createRoot } from '@opentui/react';
+import { createRoot, flushSync } from '@opentui/react';
 import { App } from '@/App';
 import { RendererTerminalGateway } from '@/shared/app/gateways/RendererTerminalGateway';
 import { SystemClipboardGateway } from '@/shared/app/gateways/SystemClipboardGateway';
@@ -19,7 +19,7 @@ export async function startTui({ transport, runPlan, env }: TuiOptions) {
   bootstrapAppContainer({
     transport,
     clipboardGateway: new SystemClipboardGateway(renderer, env.SSH_CONNECTION !== undefined),
-    terminalGateway: new RendererTerminalGateway(renderer, runPlan),
+    terminalGateway: new RendererTerminalGateway(renderer, runPlan, flushSync),
   });
   await useApp.getState().loadThemes();
   renderer.setBackgroundColor(useApp.getState().colors.background);

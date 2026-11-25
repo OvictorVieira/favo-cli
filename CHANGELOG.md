@@ -15,6 +15,14 @@
 
 ### Fixed
 
+- Resizing a terminal panel while an agent is loading now reaches its PTY immediately, keeping input and status rows aligned for every provider.
+
+- Codex usage-limit notices with typographic apostrophes now trigger the provider switch dialog, as do its `usage_limit_exceeded` errors. The same punctuation normalization applies to all providers.
+
+- Opening or resuming an agent now keeps Favo’s loading screen visible until the agent starts drawing. Returning after a usage limit prepares the switch dialog before restoring Favo, and choosing the next agent shows its loading screen.
+
+- Usage-limit notices, including Claude's five-hour limit and provider errors while OpenCode retries, open the provider switch dialog. Providers that keep waiting are stopped before switching. The next agent receives the source session ID, store location and recovery instructions to summarize and continue the work. Diagnostics under `~/.favo/logs/` record launch and session IDs, limit detection and exit status without prompts, terminal output or credentials. Update remote favo installations too, so they can correlate sessions with launches.
+
 - OpenCode now shows as signed in when it runs on its free models with no login, instead of signed out.
 
 ## [0.16.0] - 2026-11-14

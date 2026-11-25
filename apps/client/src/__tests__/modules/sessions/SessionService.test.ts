@@ -24,8 +24,102 @@ describe('SessionService', () => {
     await app.state.continueHandoff(codex!);
 
     expect(mockDb.terminalRuns[1]?.args.at(-1)).toContain('/local/claude/session.jsonl');
+    expect(mockDb.terminalRuns[1]?.args.at(-1)).toContain(mockDb.threads['seat:local/personal/claude']![0]!.id);
+    expect(mockDb.terminalRuns[1]?.args.at(-1)).toContain(app.state.selectedSeat!.path);
     expect(app.state.pendingHandoff?.source.provider).toBe('codex');
   });
+  test('hands over the exact launch even when another session in the same folder is newer', async () => {
+    const app = await getApp();
+    mockDb.terminalRateLimitDetected = true;
+    const [newer, limited] = mockDb.threads['seat:local/personal/claude']!;
+    newer!.launchId = 'other-launch';
+    newer!.transcript = '/local/other-session.jsonl';
+    limited!.launchId = 'limited-launch';
+    limited!.transcript = '/local/limited-session.jsonl';
+    const repository = container.get('ITerminalRepository');
+    const plan = repository.plan.bind(repository);
+    repository.plan = async (...args) => {
+      const result = await plan(...args);
+      return { ...result, env: { ...result.env, FAVO_LAUNCH: 'limited-launch' } };
+    };
+
+    await app.state.launchSelectedSeat();
+
+    expect(app.state.pendingHandoff?.sessionId).toBe(limited!.id);
+    expect(app.state.pendingHandoff?.transcript).toBe('/local/limited-session.jsonl');
+  });
+
+  test('still offers a handoff when refreshing the exhausted provider fails', async () => {
+    const app = await getApp();
+    mockDb.terminalRateLimitDetected = true;
+    app.state.refreshSeat = async () => {
+      throw new Error('usage unavailable');
+    };
+    await app.state.launchSelectedSeat();
+    expect(app.state.pendingHandoff?.source.provider).toBe('claude');
+  });
+
+  test('prepares the limit dialog before restoring Favo and before refreshing provider status', async () => {
+    const app = await getApp();
+    const refreshed = Promise.withResolvers<void>();
+    const entered = Promise.withResolvers<void>();
+    app.state.refreshSeat = async () => {
+      entered.resolve();
+      await refreshed.promise;
+    };
+    container.get('ITerminalGateway').run = async (_plan, options) => {
+      const result = { exitCode: 0, rateLimitDetected: true };
+      options?.beforeResume?.(result);
+      expect(app.state.pendingHandoff?.source.provider).toBe('claude');
+      expect(app.state.sessionTransition).toBeUndefined();
+      return result;
+    };
+    const running = app.state.launchSelectedSeat();
+    await entered.promise;
+    expect(app.state.pendingHandoff?.source.provider).toBe('claude');
+    refreshed.resolve();
+    await running;
+  });
+
+  test('a delayed source lookup never reopens its modal or clears loading for the chosen agent', async () => {
+    const app = await getApp();
+    const lookup = Promise.withResolvers<void>();
+    const lookupStarted = Promise.withResolvers<void>();
+    const target = Promise.withResolvers<void>();
+    const targetStarted = Promise.withResolvers<void>();
+    const threads = container.get('IThreadRepository');
+    const getThreads = threads.getThreads.bind(threads);
+    threads.getThreads = async (...args) => {
+      lookupStarted.resolve();
+      await lookup.promise;
+      return getThreads(...args);
+    };
+    let runs = 0;
+    container.get('ITerminalGateway').run = async (_plan, options) => {
+      const isSource = ++runs === 1;
+      if (!isSource) {
+        targetStarted.resolve();
+        await target.promise;
+      }
+      const result = { exitCode: 0, rateLimitDetected: isSource };
+      options?.beforeResume?.(result);
+      return result;
+    };
+    const sourceRun = app.state.launchSelectedSeat();
+    await lookupStarted.promise;
+    const codex = app.state.selectedAccount!.visibleSeats.find((seat) => seat.provider === 'codex')!;
+    const targetRun = app.state.continueHandoff(codex);
+    expect(app.state.sessionTransition?.label).toBe('Codex');
+    lookup.resolve();
+    await sourceRun;
+    await targetStarted.promise;
+    expect(app.state.sessionTransition?.label).toBe('Codex');
+    expect(app.state.pendingHandoff).toBeUndefined();
+    target.resolve();
+    await targetRun;
+    expect(app.state.sessionTransition).toBeUndefined();
+  });
+
   test('keeps no folder for a handoff when the launch had none, so another machine is not sent this one', async () => {
     const app = await getApp();
     mockDb.terminalRateLimitDetected = true;

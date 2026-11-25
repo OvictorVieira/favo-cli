@@ -47,6 +47,7 @@ export function Comb({ onQuit }: { onQuit(): void }) {
   const forgetSelectedMachine = useApp((state) => state.forgetSelectedMachine);
   const updateProviderClis = useApp((state) => state.updateProviderClis);
   const isUpdatingProviderClis = useApp((state) => state.isUpdatingProviderClis);
+  const sessionTransition = useApp((state) => state.sessionTransition);
   const pendingHandoff = useApp((state) => state.pendingHandoff);
   const isChatHistoryOpen = useApp((state) => state.isChatHistoryOpen);
   const chat = useApp((state) => state.chat);
@@ -91,6 +92,7 @@ export function Comb({ onQuit }: { onQuit(): void }) {
     isThreadPickerOpen ||
     isUsageOpen;
   const isDialogOpen =
+    sessionTransition !== undefined ||
     isScreenOpen ||
     isProviderClisOpen ||
     confirmation !== undefined ||
@@ -212,6 +214,7 @@ export function Comb({ onQuit }: { onQuit(): void }) {
   }, [canAskAboutRunning]);
 
   if (!hasLoadedFleet) return <Loading />;
+  if (sessionTransition) return <Loading label={`loading ${sessionTransition.label}`} />;
 
   return (
     <box flexDirection="column" width="100%" height="100%" backgroundColor={colors.background}>

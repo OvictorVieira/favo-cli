@@ -257,6 +257,20 @@ describe('favo and the provider hooks', () => {
     expect(launched.stdout).not.toContain('hook wrote to the conversation');
     const { stdout } = await favo(['threads', 'claude', 'work', '--json'], {}, project);
     expect(threadsOf(stdout)).toMatchObject([{ id: Session, directory: project, isGuess: false }]);
+    const logFolder = `${home}/.favo/logs`;
+    const events = readdirSync(logFolder).flatMap((file) =>
+      readFileSync(`${logFolder}/${file}`, 'utf8')
+        .trim()
+        .split('\n')
+        .map((line) => JSON.parse(line))
+    );
+    const hook = events.find(({ event }) => event === 'session_hook');
+    expect(hook).toMatchObject({ provider: 'claude', sessionId: Session, isRecorded: true });
+    expect(events.filter(({ launchId }) => launchId === hook.launchId).map(({ event }) => event)).toEqual([
+      'provider_started',
+      'session_hook',
+      'provider_exited',
+    ]);
   });
   it('reads a report that starts with byte order marks, as Windows PowerShell sends it', async () => {
     const project = await installed();

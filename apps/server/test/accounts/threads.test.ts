@@ -32,7 +32,14 @@ describe('keeping a thread', () => {
     const { client } = await seatServer();
     expect(await client.call(recordThread, event('abc'))).toEqual({ isRecorded: true });
     expect(await client.call(listThreads, Work)).toEqual([
-      { id: 'abc', directory: Project, updatedAt: '2026-10-31T12:00:00.000Z', isGuess: false, isDirectoryGone: false },
+      {
+        id: 'abc',
+        launchId: 'launch-1',
+        directory: Project,
+        updatedAt: '2026-10-31T12:00:00.000Z',
+        isGuess: false,
+        isDirectoryGone: false,
+      },
     ]);
   });
   it('hands the transcript path to the list, so a handoff can read what was said', async () => {

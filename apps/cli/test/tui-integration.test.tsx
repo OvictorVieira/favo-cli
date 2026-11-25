@@ -13,6 +13,7 @@ import { LoginState } from '@favo/contracts/rpc/views';
 import { encodeArguments, type TerminalPlan } from '@favo/domain/terminal/terminal-plan';
 import { createTestServer, Home, seedClaudeBase } from '@favo/server/test/support/test-server';
 import { testRender } from '@opentui/react/test-utils';
+import { runTerminalPlan } from '@/run-terminal-plan';
 
 const writeError = console.error;
 console.error = (...args: unknown[]) => {
@@ -25,6 +26,7 @@ async function openFleet(
   callerEnv?: Record<string, string>,
   options: {
     rateLimited?: boolean;
+    limitNotice?: string;
     failRun?: number;
     alsoSignedIn?: ('codex' | 'antigravity' | 'opencode')[];
   } = {}
@@ -54,8 +56,20 @@ async function openFleet(
       },
     },
     terminalGateway: {
-      async run(plan) {
+      async run(plan, runOptions) {
         plans.push(plan);
+        if (options.limitNotice && plans.length === 1) {
+          return runTerminalPlan(
+            {
+              command: process.execPath,
+              args: ['-e', `console.log(${JSON.stringify(options.limitNotice)}); setInterval(() => {}, 1000)`],
+              env: {},
+              unsetEnv: [],
+            },
+            {},
+            runOptions
+          );
+        }
         if (plans.length === options.failRun) throw new Error('could not start the provider');
         return { exitCode: 0, rateLimitDetected: options.rateLimited === true && plans.length === 1 };
       },
@@ -355,6 +369,35 @@ describe('the TUI on a real backend', () => {
       await view.waitForFrame((frame) => frame.includes('provider usage limit'));
       return view;
     }
+
+    test('opens the dialog after detecting the real Claude notice from a running process', async () => {
+      const view = await openFleet(undefined, {
+        limitNotice: "You've hit your 5-hour limit · resets 12:20am",
+        alsoSignedIn: ['codex'],
+      });
+      useApp.getState().selectRow('seat:local/work/claude');
+      await view.flush();
+      await useApp.getState().launchSelectedSeat();
+      const frame = await view.waitForFrame((frame) => frame.includes('provider usage limit'));
+      expect(frame).toContain('Codex');
+      view.mockInput.pressKey('RETURN');
+      await plansReach(view.plans, 2);
+      expect(view.plans[1]?.args.at(-1)).toContain('resume-agent-session');
+      expect(view.plans[1]?.args.at(-1)).toContain('local session store');
+    });
+
+    test('opens the switch dialog for the typographic Codex usage-limit notice', async () => {
+      const view = await openFleet(undefined, {
+        limitNotice: 'You’ve hit your usage limit. Upgrade to Pro or try again later.',
+        alsoSignedIn: ['codex', 'opencode'],
+      });
+      useApp.getState().selectRow('seat:local/work/codex');
+      await view.flush();
+      await useApp.getState().launchSelectedSeat();
+      const frame = await view.waitForFrame((frame) => frame.includes('provider usage limit'));
+      expect(frame).toContain('Codex reached its limit');
+      expect(frame).toContain('OpenCode');
+    });
 
     test('offers the signed-in providers of the same account, and no other', async () => {
       const view = await limitedLaunch();

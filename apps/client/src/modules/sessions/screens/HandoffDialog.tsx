@@ -45,7 +45,7 @@ export function HandoffDialog() {
         Choosing one lets it read the local session transcript.{' '}
         {pendingHandoff.transcript
           ? 'Transcript available.'
-          : 'No session transcript was saved; only workspace state will be available.'}
+          : 'The next agent will look up the local session store to recover context.'}
       </text>
       {candidates.length === 0 ? (
         <text fg={colors.faint}>No other signed-in provider is available in this account.</text>

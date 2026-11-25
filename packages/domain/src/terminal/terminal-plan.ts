@@ -4,7 +4,7 @@ import type { ProviderId } from '#domain/providers/provider';
 import { assertDomain, DomainError, DomainErrorCode } from '#domain/shared/domain-error';
 import type { ValueOf } from '#domain/shared/value-of';
 
-export type TerminalRunOptions = { monitorLimits?: ProviderId };
+export type TerminalRunOptions = { monitorLimits?: ProviderId; onReady?(): Promise<void> };
 export type TerminalRunResult = { exitCode: number; rateLimitDetected: boolean };
 
 export const EncodedArgumentsFlag = '--argv-b64';

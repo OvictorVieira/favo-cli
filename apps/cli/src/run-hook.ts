@@ -5,6 +5,8 @@ import { findProvider } from '@favo/domain/providers/provider';
 import { threadEventOf } from '@favo/domain/threads/thread';
 import { createProductionServer } from '@favo/server/production';
 
+import { recordSessionEvent, SessionEvent } from '@/session-log';
+
 export const HookCommand = 'hook';
 const ReportFlag = '--report';
 const ByteOrderMarks = /^\uFEFF+/;
@@ -21,9 +23,14 @@ export async function runHook(args: string[], env: Record<string, string | undef
       await client.call(reportThread, { provider, id: third });
     } else {
       const event = threadEventOf(JSON.parse((await Bun.stdin.text()).replace(ByteOrderMarks, '')), process.cwd());
-      if (event) await client.call(recordThread, { provider, ownerProcess: second, ...event });
+      if (event) {
+        const { isRecorded } = await client.call(recordThread, { provider, ownerProcess: second, ...event });
+        recordSessionEvent(env, { event: SessionEvent.threadRecorded, provider, sessionId: event.id, isRecorded });
+      }
     }
     server.close();
-  } catch {}
+  } catch {
+    recordSessionEvent(env, { event: SessionEvent.hookFailed });
+  }
   return 0;
 }

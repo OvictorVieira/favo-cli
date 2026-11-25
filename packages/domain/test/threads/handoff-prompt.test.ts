@@ -2,6 +2,21 @@ import { describe, expect, test } from 'bun:test';
 import { handoffPromptOf } from '#domain/threads/handoff-prompt';
 
 describe('handoff prompts', () => {
+  test('recovers an OpenCode session by its ID and store when there is no transcript file', () => {
+    const prompt = handoffPromptOf({
+      sourceProvider: 'opencode',
+      sessionId: 'ses_limited',
+      sourceHome: '/home/bee/.local/share/opencode',
+    });
+    expect(prompt).toContain('ses_limited');
+    expect(prompt).toContain('/home/bee/.local/share/opencode');
+    expect(prompt).toContain('resume-agent-session');
+    expect(prompt).toContain('read-only session storage');
+    expect(prompt).toContain('original user goal');
+    expect(prompt).toContain('current-state verification');
+    expect(prompt).toContain('Do not dump the raw transcript');
+  });
+
   test('points the next provider to the saved transcript and current workspace', () => {
     const prompt = handoffPromptOf({
       sourceProvider: 'claude',

@@ -191,6 +191,25 @@ function herdr() {
   }
 }
 
-const fakes: Record<string, () => unknown> = { claude, codex, agy, opencode, ssh, scp, herdr };
+function unavailableProvider() {
+  if (args[0] === '--version') {
+    console.log('0.1.0');
+    return;
+  }
+  if (args[0] === 'update') return;
+  process.exit(1);
+}
+
+const fakes: Record<string, () => unknown> = {
+  claude,
+  codex,
+  agy,
+  opencode,
+  copilot: unavailableProvider,
+  'cursor-agent': unavailableProvider,
+  ssh,
+  scp,
+  herdr,
+};
 await fakes[name!]!();
 if (isWindows) process.exitCode ??= 0;

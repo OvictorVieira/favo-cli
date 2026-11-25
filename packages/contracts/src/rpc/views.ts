@@ -130,6 +130,7 @@ export type ChatSummary = z.infer<typeof ChatSummary>;
 
 export const ThreadView = z.strictObject({
   id: z.string(),
+  launchId: z.string().optional(),
   directory: z.string(),
   transcript: z.string().optional(),
   updatedAt: z.string(),
